@@ -5,7 +5,7 @@
 
 import { esc, icon, avatar, scoreChip, pageHead, emptyState, btn } from '../ui.js';
 import { state, empProgress, empAvg, fractionalQuestionsOf } from '../store.js';
-import { inLeaderDept } from '../auth.js';
+import { inLeaderDept, encodeEmailKey } from '../auth.js';
 import { nav } from '../router.js';
 import { openImportModal } from './import-modal.js';
 
@@ -68,7 +68,12 @@ export function renderEmployees(container, user) {
           <div style="display:flex;align-items:center;gap:12px;min-width:0">
             ${avatar(e.name, 38)}
             <div style="min-width:0">
-              <div style="font-size:14.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.name)}</div>
+              <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                <span style="font-size:14.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.name)}</span>
+                ${isMgr && state.leaders[encodeEmailKey(e.email)]
+                  ? `<span style="flex:none;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#1E9E6A2E;color:var(--ok)">Leader</span>`
+                  : ''}
+              </div>
               <div style="font-size:12.5px;color:var(--sub)">${esc(e.title)}</div>
             </div>
           </div>
