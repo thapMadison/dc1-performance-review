@@ -273,10 +273,13 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 /* Employee detail runs wider so inline per-question comments are readable */
 .app-content--wide { max-width: 1440px; }
 
-/* Inline per-question comment block, sits directly under a score row */
-.sr-qcomments { padding: 2px 22px 14px; background: #FCFDFE; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
-.sr-qcomment { display: flex; gap: 10px; align-items: flex-start; }
-.sr-qcomment .sr-qc-name { font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+/* Inline per-question comment zone — clearly tinted so it reads as a distinct
+   band beneath the (white) question score row */
+.sr-qcomments { padding: 12px 22px 16px; background: #F4F7FB; border-top: 1px dashed var(--line-hi); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.sr-qc-label { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; color: var(--faint); letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 1px; }
+/* one reviewer's comment: white chip with a left accent bar in their color */
+.sr-qcomment { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); border-left: 3px solid var(--line-hi); }
+.sr-qcomment .sr-qc-name { font-size: 12.5px; font-weight: 700; white-space: nowrap; display: block; margin-bottom: 2px; }
 .sr-qcomment .sr-qc-text { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
 
 .comment-toggle { margin-top: 12px; background: none; border: none; color: var(--blue); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; }

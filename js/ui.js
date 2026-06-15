@@ -41,6 +41,7 @@ const PATHS = {
   clock: 'M12 6v6l4 2M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z',
   alert: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0ZM12 9v4M12 17h.01',
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
 };
 export function icon(name, opts = {}) {
   const { size = 18, color = 'currentColor', stroke = 2, style = '' } = opts;
@@ -86,11 +87,18 @@ export function hiCard({ tone = 'var(--blue)', pad = 24, cls = '', style = '', b
 }
 
 /* ---------- Avatar ---------- */
+const AVATAR_TONES = ['#29ABE2', '#7C5CFC', '#1E9E6A', '#E8743B', '#D14D8B', '#3B7BE8'];
+
+// Deterministic per-name avatar color — reuse so a person's avatar and any
+// accents tied to them (e.g. their comment) share the exact same hue.
+export function avatarColor(name) {
+  const idx = (name || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_TONES.length;
+  return AVATAR_TONES[idx];
+}
+
 export function avatar(name, size = 36, tone) {
   const initials = esc((name || '?').split(' ').slice(-2).map(s => s[0]).join('').toUpperCase());
-  const tones = ['#29ABE2', '#7C5CFC', '#1E9E6A', '#E8743B', '#D14D8B', '#3B7BE8'];
-  const idx = (name || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % tones.length;
-  const bg = tone || tones[idx];
+  const bg = tone || avatarColor(name);
   return `<div style="width:${size}px;height:${size}px;border-radius:6px;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size * 0.38)}px;font-weight:700;flex-shrink:0;letter-spacing:-0.02em">${initials}</div>`;
 }
 
