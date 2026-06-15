@@ -3,7 +3,7 @@
    or the leader's own department, read-only (Leader).
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, scoreChip, pageHead, emptyState, btn } from '../ui.js';
+import { esc, icon, avatar, scoreChip, pageHead, emptyState, btn, countdownBanner } from '../ui.js';
 import { state, empProgress, empAvg, fractionalQuestionsOf } from '../store.js';
 import { inLeaderDept, encodeEmailKey } from '../auth.js';
 import { nav } from '../router.js';
@@ -40,6 +40,8 @@ export function renderEmployees(container, user) {
       eyebrow: `Leader · ${user.dept}`, title: 'Phòng ban của tôi',
       desc: 'Nhân viên thuộc phòng ban của bạn và kết quả đánh giá tương ứng (chỉ xem).',
     })}
+
+    ${isMgr ? '' : countdownBanner()}
 
     <div style="display:flex;gap:12px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
       <div class="search-wrap" style="flex:1;max-width:340px">

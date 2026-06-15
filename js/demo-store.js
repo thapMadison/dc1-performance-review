@@ -4,7 +4,7 @@
    Firebase credentials. Seed data mirrors the design prototype.
 ═══════════════════════════════════════════════════════════════ */
 
-const KEY = 'madison_pr_demo_v2';
+const KEY = 'madison_pr_demo_v5';
 const AUTH_KEY = 'madison_pr_demo_auth';
 
 const DEMO_ACCOUNTS = [
@@ -52,26 +52,45 @@ function seed() {
     e_mgr: { name: 'Trần Minh Anh', email: 'minhanh@madison.tech', title: 'Head of People', dept: 'People', order: 8, reviewerIds: {} },
   };
 
-  function mkReview(scores, status, firstComment) {
+  // comments: map of question-index → per-question comment text
+  function mkReview(scores, status, comments, overallComment) {
     const answers = {};
     let i = 0;
     groups.forEach(g => g.items.forEach(q => {
       const entry = {};
       if (scores[i] != null) entry.score = scores[i];
-      if (i === 0 && firstComment) entry.comment = firstComment;
+      if (comments && comments[i]) entry.comment = comments[i];
       if (Object.keys(entry).length) answers[q.id] = entry;
       i++;
     }));
-    return { status, answers, updatedAt: Date.now() - 86400000, submittedAt: status === 'submitted' ? Date.now() - 86400000 : null };
+    return {
+      status, answers,
+      overallComment: overallComment || null,
+      updatedAt: Date.now() - 86400000,
+      submittedAt: status === 'submitted' ? Date.now() - 86400000 : null,
+    };
   }
 
   const reviews = {
     e1: {
-      e_lan: mkReview([5, 4, 5, 4, 5, 4, 5, 4], 'submitted', 'Kiệt là một kỹ sư vững vàng, code sạch và rất chủ động trong sprint.'),
-      e_huy: mkReview([4, 4, 4, 5, 4, 5, 4, 4], 'submitted', 'Hợp tác tốt với team product, cần mạnh dạn hơn khi đưa ý kiến.'),
+      e_lan: mkReview([5, 4, 5, 4, 5, 4, 5, 4], 'submitted',
+        {
+          0: 'Code sạch, ít lỗi, review PR rất kỹ. Bàn giao đúng chuẩn.',
+          2: 'Hoàn thành sprint đều đặn, ước lượng thời gian ngày càng chính xác.',
+          4: 'Trình bày rõ ràng trong standup, tài liệu kỹ thuật dễ theo dõi.',
+          6: 'Luôn nhận phần việc khó và theo tới cùng, rất đáng tin cậy.',
+        },
+        'Một năm rất ấn tượng. Kiệt làm chủ tốt phần frontend, chất lượng bàn giao cao và luôn sẵn sàng hỗ trợ đồng đội. Điểm cần phát triển là chủ động dẫn dắt các quyết định kỹ thuật lớn hơn trong năm tới.'),
+      e_huy: mkReview([4, 4, 4, 5, 4, 5, 4, 4], 'submitted',
+        {
+          0: 'Sản phẩm bàn giao ổn định, hiếm khi phải sửa lại sau khi release.',
+          3: 'Phối hợp với team product rất ăn ý, chủ động hỏi để hiểu đúng yêu cầu.',
+          5: 'Tiếp cận vấn đề có hệ thống, đề xuất giải pháp khả thi và gọn gàng.',
+        },
+        'Phối hợp với product rất ăn ý và đáng tin cậy về tiến độ. Nên tự tin trình bày quan điểm sớm hơn trong các buổi thảo luận để tạo ảnh hưởng nhiều hơn.'),
     },
     e2: {
-      e_lan: mkReview([4, 5, 4, 4, 3, 4, 4, 4], 'draft', ''),
+      e_lan: mkReview([4, 5, 4, 4, 3, 4, 4, 4], 'draft', null),
     },
   };
 
@@ -80,6 +99,14 @@ function seed() {
     employees,
     reviews,
     finals: {},
+    groupWeights: { g1: 43, g2: 30, g3: 27 },
+    bands: [
+      { id: 'A', label: 'Loại A', min: 4.50, max: 5.00 },
+      { id: 'B', label: 'Loại B', min: 4.00, max: 4.49 },
+      { id: 'C', label: 'Loại C', min: 3.00, max: 3.99 },
+      { id: 'D', label: 'Loại D', min: 2.21, max: 2.99 },
+      { id: 'E', label: 'Loại E', min: 1.00, max: 2.20 },
+    ],
     managers: { 'minhanh@madison,tech': true },
     leaders: { 'lan@madison,tech': 'Engineering' },
   };
@@ -102,8 +129,8 @@ function persist() {
 }
 function emitAll() {
   if (!handlers) return;
-  ['groups', 'employees', 'reviews', 'finals', 'managers', 'leaders'].forEach(key =>
-    handlers.onData(key, JSON.parse(JSON.stringify(data[key]))));
+  ['groups', 'employees', 'reviews', 'finals', 'groupWeights', 'bands', 'managers', 'leaders'].forEach(key =>
+    handlers.onData(key, JSON.parse(JSON.stringify(data[key] ?? null))));
 }
 function mutate(fn) { fn(data); persist(); emitAll(); }
 
@@ -165,6 +192,13 @@ export const backend = {
   },
   resetAllFinals(empId) {
     mutate(d => { delete d.finals[empId]; });
+  },
+
+  setGroupWeight(groupId, weight) {
+    mutate(d => {
+      if (!d.groupWeights) d.groupWeights = {};
+      d.groupWeights[groupId] = weight;
+    });
   },
 
   importQuestions(groups) {

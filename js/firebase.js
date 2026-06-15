@@ -25,7 +25,7 @@ const BASE = 'tools/performance-review';
 
 function subscribeData(onData) {
   unsubscribeData();
-  ['groups', 'employees', 'reviews', 'finals', 'managers', 'leaders'].forEach(key => {
+  ['groups', 'employees', 'reviews', 'finals', 'groupWeights', 'bands', 'managers', 'leaders'].forEach(key => {
     unsubs.push(onValue(ref(db, `${BASE}/${key}`), snap => onData(key, snap.val()), err => {
       console.error(`RTDB read failed for /${BASE}/${key}:`, err);
     }));
@@ -92,6 +92,10 @@ export const backend = {
   },
   resetFinal(empId, qid) { return remove(ref(db, `${BASE}/finals/${empId}/${qid}`)); },
   resetAllFinals(empId) { return remove(ref(db, `${BASE}/finals/${empId}`)); },
+
+  setGroupWeight(groupId, weight) {
+    return set(ref(db, `${BASE}/groupWeights/${groupId}`), weight);
+  },
 
   // Replacing the question set invalidates existing reviews/finals
   importQuestions(groups) {

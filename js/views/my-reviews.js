@@ -2,7 +2,7 @@
    MY REVIEWS — employees assigned to the current reviewer
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, progress, pageHead, emptyState, hiCard } from '../ui.js';
+import { esc, icon, avatar, statusPill, progress, pageHead, emptyState, hiCard, countdownBanner } from '../ui.js';
 import { state, allQuestionIds, reviewOf, answeredCount } from '../store.js';
 import { nav } from '../router.js';
 import { APP_CYCLE } from '../firebase-config.js';
@@ -21,6 +21,8 @@ export function renderMyReviews(container, user) {
 
   container.innerHTML = `
     ${pageHead({ eyebrow: 'Reviewer', title: 'Đánh giá của tôi', desc: `Những nhân viên bạn được phân công đánh giá trong chu kỳ ${APP_CYCLE}.` })}
+
+    ${countdownBanner()}
 
     <div class="stat-row stat-row-3" style="margin-bottom:28px">
       ${cards.map(s => hiCard({

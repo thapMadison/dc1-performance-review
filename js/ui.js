@@ -3,6 +3,8 @@
    All functions return HTML strings; modals are imperative.
 ═══════════════════════════════════════════════════════════════ */
 
+import { APP_DEADLINE, APP_DEADLINE_ISO } from './firebase-config.js';
+
 export const LOGO = 'assets/logo-gorilla.png';
 
 export const GROUP_COLORS = ['#E8743B', '#3B7BE8', '#1E9E6A', '#7C5CFC', '#D14D8B', '#29ABE2'];
@@ -198,4 +200,100 @@ export function openModal({ title = '', subtitle = '', width = 560, contentHtml 
   document.body.appendChild(overlay);
 
   return { root: overlay, body: overlay.querySelector('[data-modal-body]'), close };
+}
+
+/* ---------- Review-period countdown ----------
+   Time remaining until the configured deadline. Shown to every member
+   (manager / leader / reviewer), regardless of review assignment. */
+
+const MS = { day: 86400000, hour: 3600000, min: 60000, sec: 1000 };
+const pad2 = n => String(n).padStart(2, '0');
+
+// Returns { ms, expired, days, hours, mins, secs, dd, hh, mm, ss, label, tone }.
+// `ms` is the raw remaining milliseconds (negative once past the deadline);
+// dd/hh/mm/ss are 2-digit strings for the segmented clock display.
+export function deadlineInfo(nowMs = Date.now()) {
+  const end = new Date(APP_DEADLINE_ISO).getTime();
+  const ms = end - nowMs;
+  if (ms <= 0) {
+    return { ms, expired: true, days: 0, hours: 0, mins: 0, secs: 0,
+      dd: '00', hh: '00', mm: '00', ss: '00', label: 'Đã hết hạn', tone: 'var(--danger)' };
+  }
+  const days = Math.floor(ms / MS.day);
+  const hours = Math.floor((ms % MS.day) / MS.hour);
+  const mins = Math.floor((ms % MS.hour) / MS.min);
+  const secs = Math.floor((ms % MS.min) / MS.sec);
+  // tone: red ≤3 days left, amber ≤7, otherwise the calm "self-assessment" green
+  const tone = days <= 3 ? 'var(--danger)' : days <= 7 ? 'var(--warn)' : 'var(--ok)';
+  const label = days >= 1
+    ? `Còn ${days} ngày ${hours} giờ`
+    : `Còn ${hours} giờ ${mins} phút`;
+  return { ms, expired: false, days, hours, mins, secs,
+    dd: pad2(days), hh: pad2(hours), mm: pad2(mins), ss: pad2(secs), label, tone };
+}
+
+// One segment of the dd:hh:mm:ss clock. `unit` keys the live-updating value.
+function cdSeg(value, label, unit, tone) {
+  return `<div class="cd-seg">
+    <span class="cd-num" data-cd="${unit}" style="color:${tone}">${esc(value)}</span>
+    <span class="cd-unit">${esc(label)}</span>
+  </div>`;
+}
+
+// Reusable real-time countdown banner. Visible to all roles.
+// `variant`: 'card' (default, segmented dd:hh:mm:ss clock) or
+//            'navy' (compact, for the dashboard hero aside).
+export function countdownBanner({ variant = 'card' } = {}) {
+  const d = deadlineInfo();
+  if (variant === 'navy') {
+    return `<div class="countdown-aside" data-countdown style="text-align:center;padding-left:28px;border-left:1px solid rgba(255,255,255,0.12)">
+      <div style="font-size:12px;color:#8A99B0;font-weight:600;margin-bottom:6px">Còn lại đến hạn</div>
+      <div class="cd-clock cd-clock--navy">
+        ${cdSeg(d.dd, 'NGÀY', 'dd', '#fff')}<span class="cd-colon">:</span>${cdSeg(d.hh, 'GIỜ', 'hh', '#fff')}<span class="cd-colon">:</span>${cdSeg(d.mm, 'PHÚT', 'mm', '#fff')}<span class="cd-colon">:</span>${cdSeg(d.ss, 'GIÂY', 'ss', '#fff')}
+      </div>
+      <div style="font-size:11px;color:#8A99B0;margin-top:7px">Hạn chót ${esc(APP_DEADLINE)}</div>
+    </div>`;
+  }
+  return `<div class="card cd-card" data-countdown style="margin-bottom:18px;border-left:3px solid ${d.tone}">
+    <div class="cd-head">
+      <div class="cd-head-icon" style="background:color-mix(in srgb, ${d.tone} 13%, transparent)">
+        ${icon('clock', { size: 20, color: d.tone, stroke: 2.2 })}
+      </div>
+      <div style="min-width:0">
+        <div class="cd-title" style="color:${d.tone}">Cross Review</div>
+        <div class="cd-sub">Bạn nhớ hoàn tất trước khi hết hạn nhé! · Hạn chót ${esc(APP_DEADLINE)}</div>
+      </div>
+    </div>
+    <div class="cd-clock">
+      ${cdSeg(d.dd, 'NGÀY', 'dd', d.tone)}<span class="cd-colon" style="color:${d.tone}">:</span>${cdSeg(d.hh, 'GIỜ', 'hh', d.tone)}<span class="cd-colon" style="color:${d.tone}">:</span>${cdSeg(d.mm, 'PHÚT', 'mm', d.tone)}<span class="cd-colon" style="color:${d.tone}">:</span>${cdSeg(d.ss, 'GIÂY', 'ss', d.tone)}
+    </div>
+  </div>`;
+}
+
+// Tick every countdown banner in the DOM, once per second. Runs for the app's
+// lifetime (cheap) — when no banner is mounted it simply does nothing, so a
+// banner that appears after login picks up the live updates immediately.
+let countdownTimer = null;
+function tickCountdowns() {
+  const nodes = document.querySelectorAll('[data-countdown]');
+  if (!nodes.length) return;
+  const d = deadlineInfo();
+  nodes.forEach(node => {
+    const isNavy = node.classList.contains('countdown-aside');
+    node.querySelectorAll('[data-cd]').forEach(seg => {
+      seg.textContent = d[seg.dataset.cd];
+      if (!isNavy) seg.style.color = d.tone; // navy keeps white digits
+    });
+    // colon + accents follow the tone on the light-card variant
+    if (!isNavy) {
+      node.style.borderLeftColor = d.tone;
+      node.querySelectorAll('.cd-colon').forEach(c => { c.style.color = d.tone; });
+      const title = node.querySelector('.cd-title');
+      if (title) title.style.color = d.tone;
+    }
+  });
+}
+export function startCountdownTicker() {
+  if (countdownTimer) return;
+  countdownTimer = setInterval(tickCountdowns, MS.sec);
 }

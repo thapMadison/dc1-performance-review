@@ -23,6 +23,7 @@ export const MS_TENANT = 'fa190090-4fc1-416a-bd41-a480b5dad5b7';
 export const RECAPTCHA_SITE_KEY = '6LfwAfMsAAAAALaOyFaWAgofFAjLJEOYkM8BwLwz';
 
 // Labels shown across the app
-export const APP_CYCLE = 'Q2 2026';
+export const APP_CYCLE = 'S1 2026';
 export const APP_CYCLE_YEAR = '2026';
-export const APP_DEADLINE = '31/07/2026';
+export const APP_DEADLINE = '06/07/2026';            // display string (DD/MM/YYYY)
+export const APP_DEADLINE_ISO = '2026-07-06T23:59:59'; // parseable; end of the deadline day

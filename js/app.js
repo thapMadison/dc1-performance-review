@@ -7,7 +7,7 @@ import { state, subscribe, initStore } from './store.js';
 import { resolveUser } from './auth.js';
 import { resolveRoute } from './router.js';
 import { setRenderer } from './bus.js';
-import { esc } from './ui.js';
+import { esc, startCountdownTicker } from './ui.js';
 
 import { renderLogin } from './views/login.js';
 import { sidebarHtml, wireSidebar, topbarHtml } from './views/shell.js';
@@ -79,6 +79,7 @@ setRenderer(render);
 subscribe(render);
 window.addEventListener('hashchange', render);
 render();
+startCountdownTicker(); // live-update any countdown banners once a minute
 
 try {
   const mod = await import(isDemo ? './demo-store.js' : './firebase.js');

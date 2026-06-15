@@ -36,6 +36,8 @@ textarea:focus { border-color: var(--blue) !important; box-shadow: 0 0 0 3px rgb
 ::-webkit-scrollbar-thumb { background: #CDD5DE; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: #B6BEC8; background-clip: padding-box; border: 2px solid transparent; }
 input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+.q-weight-input::-webkit-inner-spin-button, .q-weight-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.q-weight:hover, .q-weight:focus-within { box-shadow: inset 0 0 0 1.5px currentColor; }
 @keyframes modalIn { from { opacity: 0; transform: translateY(-12px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes prspin { to { transform: rotate(360deg); } }
 .pr-spin { animation: prspin .7s linear infinite; }
@@ -268,9 +270,19 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 .sr-grp-body { overflow: hidden; transition: max-height .28s cubic-bezier(.4,0,.2,1), opacity .22s; max-height: 9999px; opacity: 1; }
 .sr-grp-body--collapsed { max-height: 0 !important; opacity: 0; }
 
+/* Employee detail runs wider so inline per-question comments are readable */
+.app-content--wide { max-width: 1440px; }
+
+/* Inline per-question comment block, sits directly under a score row */
+.sr-qcomments { padding: 2px 22px 14px; background: #FCFDFE; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
+.sr-qcomment { display: flex; gap: 10px; align-items: flex-start; }
+.sr-qcomment .sr-qc-name { font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.sr-qcomment .sr-qc-text { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
+
 .comment-toggle { margin-top: 12px; background: none; border: none; color: var(--blue); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; }
 .group-nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 6px; text-decoration: none; transition: background .13s; border: none; background: transparent; width: 100%; cursor: pointer; text-align: left; }
 .group-nav-item:hover { background: #F3F6F9; }
+.group-nav-item--stacked { align-items: flex-start; padding: 9px 9px; }
 .text-underline-btn { background: none; border: none; color: var(--sub); font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline; }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -300,6 +312,42 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 /* generic helper hooks added to inline-styled rows in the views */
 .stat-row { display: flex; gap: 16px; }            /* KPI / stat card rows */
 .stat-row > * { flex: 1; min-width: 0; }
+
+/* ---------- Review-period countdown banner ---------- */
+.cd-card { padding: 0; overflow: hidden; }
+.cd-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px; }
+.cd-head-icon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.cd-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.cd-sub { font-size: 12.5px; color: var(--sub); margin-top: 2px; }
+
+.cd-clock {
+  /* top-align segments so the colon lines up with the number row, not the
+     unit labels below it */
+  display: flex; align-items: flex-start; justify-content: center; gap: 6px;
+  padding: 18px 20px 22px; border-top: 1px solid var(--line);
+}
+.cd-clock--navy { padding: 0; border-top: none; }
+.cd-seg { display: flex; flex-direction: column; align-items: center; min-width: 58px; }
+.cd-num {
+  font-size: 46px; font-weight: 700; letter-spacing: -0.02em; line-height: 1;
+  font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1;
+}
+.cd-clock--navy .cd-num { font-size: 26px; }
+.cd-unit {
+  font-size: 11px; font-weight: 700; color: var(--faint);
+  letter-spacing: 0.1em; text-transform: uppercase; margin-top: 7px;
+}
+.cd-clock--navy .cd-unit { font-size: 9px; margin-top: 4px; color: #8A99B0; }
+.cd-colon {
+  /* height = the number's line box (font-size × line-height:1) so the colon
+     centers vertically against the digits */
+  font-size: 40px; font-weight: 700; height: 46px; line-height: 46px;
+  opacity: 0.55; font-variant-numeric: tabular-nums;
+}
+.cd-clock--navy .cd-colon { font-size: 22px; height: 26px; line-height: 26px; color: #fff; }
 
 /* ---------- ≤960px : tablet ---------- */
 @media (max-width: 960px) {
@@ -353,12 +401,22 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
   .stat-row > * { flex: 1 1 calc(50% - 6px); min-width: calc(50% - 6px); }
   .stat-row.stat-row-3 > * { flex: 1 1 calc(50% - 6px); }
 
-  /* dashboard company-progress card: stack the deadline aside under the bar */
+  /* dashboard company-progress card: stack the deadline/countdown aside under the bar */
   .progress-hero { flex-direction: column; align-items: stretch !important; gap: 18px !important; }
-  .progress-hero .progress-aside {
+  .progress-hero .progress-aside,
+  .progress-hero .countdown-aside {
     padding-left: 0 !important; border-left: none !important;
     border-top: 1px solid rgba(255,255,255,0.12); padding-top: 16px !important; text-align: left !important;
   }
+  .progress-hero .countdown-aside .cd-clock { justify-content: flex-start; }
+
+  /* countdown clock: shrink digits so all 4 segments fit on a phone */
+  .cd-head { padding: 14px 16px; }
+  .cd-clock { padding: 16px 12px 18px; gap: 2px; }
+  .cd-seg { min-width: 0; flex: 1; }
+  .cd-num { font-size: 30px; }
+  .cd-unit { font-size: 9px; letter-spacing: 0.06em; }
+  .cd-colon { font-size: 26px; height: 30px; line-height: 30px; }
 
   /* employee-detail header: avatar + name on one row, score/reviewer below */
   .detail-hero { flex-wrap: wrap; align-items: flex-start !important; gap: 16px !important; }
@@ -376,6 +434,13 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
   .score-table .sr-row,
   .score-table .sr-grp,
   .score-table .sr-band { min-width: 600px; }
+  /* per-question comments stay pinned to the visible viewport (rather than
+     scrolling off with the 600px score grid) so they remain readable */
+  .score-table .sr-qcomments {
+    position: sticky; left: 0;
+    width: calc(100vw - 32px); max-width: 100%;
+    box-sizing: border-box;
+  }
 
   /* employees list: collapse 5-col grid to name + chevron, stack meta below */
   .emp-grid-head { display: none !important; }

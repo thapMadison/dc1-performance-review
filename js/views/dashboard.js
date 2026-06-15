@@ -2,11 +2,11 @@
    MANAGER · DASHBOARD — KPIs, company-wide progress, attention list
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, pageHead, emptyState, hiCard, eyebrowMark } from '../ui.js';
+import { esc, icon, avatar, statusPill, pageHead, emptyState, hiCard, eyebrowMark, countdownBanner } from '../ui.js';
 import { state, empProgress, fractionalQuestionsOf } from '../store.js';
 import { nav } from '../router.js';
 import { setEmployeesFractionalFilter } from './employees.js';
-import { APP_CYCLE, APP_CYCLE_YEAR, APP_DEADLINE } from '../firebase-config.js';
+import { APP_CYCLE } from '../firebase-config.js';
 
 export function renderDashboard(container) {
   const { employees } = state;
@@ -67,11 +67,7 @@ export function renderDashboard(container) {
             <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--blue),#5BC6F0);border-radius:8px;transition:width .5s"></div>
           </div>
         </div>
-        <div class="progress-aside" style="text-align:center;padding-left:28px;border-left:1px solid rgba(255,255,255,0.12)">
-          <div style="font-size:12px;color:#8A99B0;font-weight:600;margin-bottom:4px">Deadline</div>
-          <div style="font-size:22px;font-weight:700;color:#fff">${esc(APP_DEADLINE)}</div>
-          <div style="font-size:12px;color:#8A99B0">${esc(APP_CYCLE_YEAR)}</div>
-        </div>
+        ${countdownBanner({ variant: 'navy' })}
       </div>
     </div>
 

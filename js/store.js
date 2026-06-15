@@ -12,9 +12,20 @@ export const state = {
   employees: [],         // [{ id, name, email, title, dept, order, reviewerIds: {empId:true} }]
   reviews: {},           // { empId: { reviewerEmpId: { status, answers, updatedAt, submittedAt } } }
   finals: {},            // { empId: { qid: { score, edited: true } } }  — manager overrides only
+  groupWeights: {},      // { groupId: weightPercent }  — per-group weight, edited directly in DB
+  bands: null,           // [{ id, label, min, max }]  — classification thresholds, edited in DB
   managers: {},          // { emailKey: true }
   leaders: {},           // { emailKey: '<dept name>' }
 };
+
+// Default classification bands (used until overridden in the DB under /bands).
+export const DEFAULT_BANDS = [
+  { id: 'A', label: 'Loại A', min: 4.50, max: 5.00 },
+  { id: 'B', label: 'Loại B', min: 4.00, max: 4.49 },
+  { id: 'C', label: 'Loại C', min: 3.00, max: 3.99 },
+  { id: 'D', label: 'Loại D', min: 2.21, max: 2.99 },
+  { id: 'E', label: 'Loại E', min: 1.00, max: 2.20 },
+];
 
 let backend = null;
 const subs = new Set();
@@ -39,6 +50,8 @@ export async function initStore(b) {
     onData(key, val) {
       if (key === 'groups') {
         state.groups = (val || []).filter(Boolean).map(g => ({ ...g, items: (g.items || []).filter(Boolean) }));
+      } else if (key === 'bands') {
+        state.bands = Array.isArray(val) ? val.filter(Boolean) : (val ? Object.values(val) : null);
       } else if (key === 'employees') {
         state.employees = Object.entries(val || {})
           .map(([id, e]) => ({ id, dept: '', title: '', ...e, reviewerIds: e.reviewerIds || {} }))
@@ -93,6 +106,62 @@ export function empAvg(empId) {
   return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10;
 }
 
+/* ═══════════ Weighted scoring & classification ═══════════
+   Formula (per the design): each question's final score (1–5)
+   → raw group average → × group weight = weighted score
+   → sum of weighted scores = final result.
+   All maths use raw (unrounded) values; views round only for display. */
+
+export const bands = () => state.bands && state.bands.length ? state.bands : DEFAULT_BANDS;
+
+// Weight (%) configured for a group; 0 when not set in the DB.
+export function groupWeight(groupId) {
+  const w = state.groupWeights && state.groupWeights[groupId];
+  return typeof w === 'number' && isFinite(w) ? w : 0;
+}
+
+// Raw group average of question finals. Unscored questions count as 0
+// (per the design note "Tiêu chí chưa chấm tính điểm 0"), so the divisor
+// is the group's total question count. null only for an empty group.
+export function groupAvg(empId, group) {
+  const items = group.items || [];
+  if (!items.length) return null;
+  const sum = items.reduce((a, q) => a + (finalForQuestion(empId, q.id).score ?? 0), 0);
+  return sum / items.length;
+}
+
+// Per-group breakdown for the result overview.
+// { group, scored, total, avg, weight, weighted }
+export function groupStats(empId) {
+  return state.groups.map(g => {
+    const total = (g.items || []).length;
+    const scored = (g.items || []).filter(q => finalForQuestion(empId, q.id).score != null).length;
+    const avg = groupAvg(empId, g);
+    const weight = groupWeight(g.id);
+    const weighted = avg == null ? null : avg * (weight / 100);
+    return { group: g, scored, total, avg, weight, weighted };
+  });
+}
+
+// Sum of group weights (%). Used to flag when it ≠ 100.
+export function totalWeight() {
+  return state.groups.reduce((a, g) => a + groupWeight(g.id), 0);
+}
+
+// Weighted final = Σ (group raw average × weight%). Raw, unrounded.
+// null when there are no groups with questions at all.
+export function weightedFinal(empId) {
+  const stats = groupStats(empId).filter(s => s.weighted != null);
+  if (!stats.length) return null;
+  return stats.reduce((a, s) => a + s.weighted, 0);
+}
+
+// Classification band for a final score; null when no score / no band matches.
+export function classify(score) {
+  if (score == null) return null;
+  return bands().find(b => score >= b.min && score <= b.max) || null;
+}
+
 // Final scores must end up as integers 1–5; fractional auto-averages
 // need a manager round-off pass.
 export function isFractional(v) { return v != null && !Number.isInteger(v); }
@@ -129,10 +198,12 @@ function sanitizeAnswers(answers) {
   return out;
 }
 
-export function saveReview(empId, reviewerId, { status, answers, submittedAt }) {
+export function saveReview(empId, reviewerId, { status, answers, overallComment, submittedAt }) {
+  const oc = overallComment && overallComment.trim() ? overallComment.trim() : null;
   return backend.saveReview(empId, reviewerId, {
     status,
     answers: sanitizeAnswers(answers),
+    overallComment: oc,
     updatedAt: Date.now(),
     submittedAt: status === 'submitted' ? Date.now() : (submittedAt || null),
   });
@@ -155,6 +226,12 @@ export function setFinal(empId, qid, score) {
 }
 export function resetFinal(empId, qid) { return backend.resetFinal(empId, qid); }
 export function resetAllFinals(empId) { return backend.resetAllFinals(empId); }
+
+// Per-group weight (%). Clamped to 0–100; manager-only (Bộ câu hỏi page).
+export function setGroupWeight(groupId, weight) {
+  const w = Math.max(0, Math.min(100, Math.round((Number(weight) || 0) * 100) / 100));
+  return backend.setGroupWeight(groupId, w);
+}
 
 export function importQuestions(groups) { return backend.importQuestions(groups); }
 export function importEmployees(list) { return backend.importEmployees(list); }

@@ -6,9 +6,36 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS } from '../ui.js';
-import { state, allQuestionIds, reviewOf, saveReview } from '../store.js';
+import { state, allQuestionIds, reviewOf, saveReview, classify } from '../store.js';
 import { nav } from '../router.js';
 import { requestRender } from '../bus.js';
+
+// Band palette (mirrors employee-detail) — used for the per-group A–E chip.
+const BAND_COLORS = { A: 'var(--ok)', B: 'var(--blue)', C: '#E8A020', D: '#E06030', E: 'var(--danger)' };
+
+// Per-group progress + live average (computed from the working session copy).
+// Unscored questions are excluded from the average so the rail reflects only
+// what the reviewer has actually graded so far.
+function groupRailStats(g, s) {
+  const scores = g.items.map(q => s.answers[q.id] && s.answers[q.id].score).filter(v => v != null);
+  const ans = scores.length;
+  const total = g.items.length;
+  const done = total > 0 && ans === total;
+  const avg = ans ? scores.reduce((a, b) => a + b, 0) / ans : null;
+  const band = avg != null ? classify(Math.round(avg * 10) / 10) : null;
+  return { ans, total, done, avg, band, avgStr: avg != null ? (Math.round(avg * 10) / 10).toFixed(1) : null };
+}
+
+// "TB X.X" chip colored by band classification.
+function avgChip(st, { big = false } = {}) {
+  if (st.avgStr == null) return '';
+  const c = st.band ? BAND_COLORS[st.band.id] : 'var(--sub)';
+  const fs = big ? '12px' : '11px';
+  return `
+    <span style="display:inline-flex;align-items:center;background:color-mix(in srgb,${c} 12%,transparent);padding:2px 7px;border-radius:999px;white-space:nowrap">
+      <span style="font-size:${fs};font-weight:700;color:${c}">TB ${st.avgStr}</span>
+    </span>`;
+}
 
 // One in-progress form session at a time (reset when empId/reviewer changes)
 let session = null;
@@ -27,7 +54,8 @@ function getSession(empId, reviewerId) {
       }
     });
   }
-  session = { empId, reviewerId, answers, openComments, saved: false };
+  const overallComment = (existing && existing.overallComment) || '';
+  session = { empId, reviewerId, answers, openComments, overallComment, saved: false };
   return session;
 }
 export function clearReviewSession() { session = null; }
@@ -52,6 +80,17 @@ export function renderReviewForm(container, user, empId) {
   const ans = qids.filter(q => s.answers[q] && s.answers[q].score != null).length;
   const pct = qids.length ? Math.round(ans / qids.length * 100) : 0;
   const complete = qids.length > 0 && ans === qids.length;
+  // Submit requires every question scored AND an overall comment.
+  // (Drafts may be saved without the overall comment.)
+  const hasOverall = !!(s.overallComment && s.overallComment.trim());
+  const canSubmit = complete && hasOverall;
+  // Submit-button label reflects the current blocker (scores first, then comment).
+  const submitLabel = !complete ? `Còn ${qids.length - ans} câu`
+    : !hasOverall ? 'Cần nhận xét tổng quan'
+    : 'Nộp đánh giá';
+  const submitLabelShort = !complete ? `Còn ${qids.length - ans}`
+    : !hasOverall ? 'Cần nhận xét'
+    : 'Nộp';
 
   container.innerHTML = `
   <div class="review-layout" style="display:flex;gap:32px;align-items:flex-start">
@@ -105,6 +144,18 @@ export function renderReviewForm(container, user, empId) {
         </div>
       </div>`;
       }).join('')}
+
+      <div id="grp-overall" class="card group-anchor" style="margin-bottom:26px;padding:0;overflow:hidden;border-left:3px solid var(--blue)">
+        <div style="display:flex;align-items:center;gap:11px;padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC">
+          <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon('edit', { size: 13, color: '#fff' })}</div>
+          <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">Nhận xét tổng quan <span style="color:var(--danger)">*</span></h2>
+          <span style="font-size:12px;font-weight:700;color:${hasOverall || locked ? 'var(--ok)' : 'var(--danger)'};display:inline-flex;align-items:center;gap:4px">${hasOverall || locked ? icon('check', { size: 13, color: 'var(--ok)', stroke: 3 }) : ''}Bắt buộc</span>
+        </div>
+        <div style="padding:20px">
+          <div style="font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:14px">Nhận xét chung về nhân viên: điểm mạnh, điểm cần cải thiện, hoặc bất kỳ ý kiến tổng thể nào ngoài từng câu hỏi. Cần nhập trước khi nộp (có thể lưu nháp mà chưa nhập).</div>
+          <textarea class="textarea" data-overall ${locked ? 'disabled' : ''} style="min-height:120px" placeholder="Viết nhận xét tổng quan của bạn…">${esc(s.overallComment)}</textarea>
+        </div>
+      </div>
     </div>
 
     <div class="review-rail" style="width:264px;flex-shrink:0;position:sticky;top:0;padding-top:52px">
@@ -119,25 +170,46 @@ export function renderReviewForm(container, user, empId) {
         </div>
         ${progress(ans, qids.length, complete ? 'var(--ok)' : 'var(--blue)', 8)}
 
-        <div style="display:flex;flex-direction:column;gap:2px;margin:18px 0 4px">
+        ${(() => {
+          const allScores = qids.map(q => s.answers[q] && s.answers[q].score).filter(v => v != null);
+          if (!allScores.length) return '';
+          const overall = allScores.reduce((a, b) => a + b, 0) / allScores.length;
+          const overallRounded = Math.round(overall * 100) / 100;
+          const overallBand = classify(overallRounded);
+          const bc = overallBand ? BAND_COLORS[overallBand.id] : 'var(--sub)';
+          return `
+          <div style="display:flex;align-items:center;gap:10px;margin-top:16px;padding:11px 13px;background:color-mix(in srgb, ${bc} 8%, transparent);border:1.5px solid color-mix(in srgb, ${bc} 30%, transparent);border-radius:9px">
+            ${overallBand ? `<span style="display:inline-flex;align-items:center;gap:6px;background:${bc};padding:4px 9px;border-radius:999px;flex-shrink:0">
+              <span style="width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(overallBand.id)}</span>
+              <span style="font-size:11.5px;font-weight:700;color:#fff">${esc(overallBand.label)}</span>
+            </span>` : ''}
+            <span style="margin-left:auto;font-size:22px;font-weight:700;color:${bc};letter-spacing:-0.02em">${overallRounded.toFixed(2)}<span style="font-size:12px;color:var(--faint);font-weight:600">/5</span></span>
+          </div>`;
+        })()}
+
+        <div style="display:flex;flex-direction:column;gap:4px;margin:18px 0 4px">
           ${state.groups.map((g, gi) => {
             const color = GROUP_COLORS[gi % GROUP_COLORS.length];
-            const gAns = g.items.filter(q => s.answers[q.id] && s.answers[q.id].score != null).length;
-            const gDone = g.items.length > 0 && gAns === g.items.length;
+            const st = groupRailStats(g, s);
             return `
-            <button class="group-nav-item" data-goto="${esc(g.id)}" style="border-left:2px solid ${gDone ? 'var(--ok)' : color}">
-              <span style="width:18px;height:18px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${gDone ? 'var(--ok)' : color + '22'};color:${gDone ? '#fff' : color}">
-                ${gDone ? icon('check', { size: 11, stroke: 3 }) : `<span style="font-size:10px;font-weight:700">${gi + 1}</span>`}
+            <button class="group-nav-item group-nav-item--stacked" data-goto="${esc(g.id)}" style="border-left:2px solid ${st.done ? 'var(--ok)' : color}">
+              <span style="width:18px;height:18px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${st.done ? 'var(--ok)' : color + '22'};color:${st.done ? '#fff' : color};margin-top:1px">
+                ${st.done ? icon('check', { size: 11, stroke: 3 }) : `<span style="font-size:10px;font-weight:700">${gi + 1}</span>`}
               </span>
-              <span style="flex:1;font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</span>
-              <span style="font-size:11px;font-weight:600;color:${gDone ? 'var(--ok)' : 'var(--faint)'}">${gAns}/${g.items.length}</span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+                <span style="display:flex;align-items:center;gap:8px">
+                  <span style="flex:1;font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</span>
+                  <span style="font-size:11px;font-weight:600;color:${st.done ? 'var(--ok)' : 'var(--faint)'};flex-shrink:0">${st.ans}/${st.total}</span>
+                </span>
+                ${st.avgStr != null ? `<span style="display:flex">${avgChip(st)}</span>` : ''}
+              </span>
             </button>`;
           }).join('')}
         </div>
 
         ${!locked ? `
         <div class="rail-actions" style="display:flex;flex-direction:column;gap:9px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
-          ${btn({ label: complete ? 'Nộp đánh giá' : `Còn ${qids.length - ans} câu`, variant: 'primary', full: true, icon: complete ? 'check' : undefined, disabled: !complete, attrs: 'data-submit' })}
+          ${btn({ label: submitLabel, variant: 'primary', full: true, icon: canSubmit ? 'check' : undefined, disabled: !canSubmit, attrs: 'data-submit' })}
           ${btn({ label: s.saved ? 'Đã lưu nháp' : 'Lưu bản nháp', variant: 'ghost', full: true, icon: s.saved ? 'check' : undefined, attrs: 'data-save' })}
         </div>` : ''}
         </div>
@@ -165,7 +237,7 @@ export function renderReviewForm(container, user, empId) {
         ? `<span class="pill pill-locked" style="height:40px;padding:0 14px">${icon('lock', { size: 13, color: '#4B3F9E' })} Đã khóa</span>`
         : `<div class="bb-actions">
             ${btn({ label: 'Lưu', variant: 'ghost', size: 'md', attrs: 'data-save-m' })}
-            ${btn({ label: complete ? 'Nộp' : `Còn ${qids.length - ans}`, variant: 'primary', size: 'md', icon: complete ? 'check' : undefined, disabled: !complete, attrs: 'data-submit-m' })}
+            ${btn({ label: submitLabelShort, variant: 'primary', size: 'md', icon: canSubmit ? 'check' : undefined, disabled: !canSubmit, attrs: 'data-submit-m' })}
           </div>`}
     </div>
   </div>`;
@@ -255,11 +327,29 @@ function wire(container, emp, user, locked, s, qids) {
       if (ta) ta.focus();
     }));
 
+  // overall comment: like per-question comments, typing only mutates the
+  // session (caret stays put). But the empty↔non-empty transition flips
+  // whether the form can be submitted, so re-render on that crossing only
+  // (and refocus the recreated textarea, caret at the end).
+  const overallTa = container.querySelector('[data-overall]');
+  if (overallTa) overallTa.addEventListener('input', () => {
+    const was = !!(s.overallComment && s.overallComment.trim());
+    s.overallComment = overallTa.value;
+    s.saved = false;
+    const now = !!(s.overallComment && s.overallComment.trim());
+    if (was !== now) {
+      requestRender();
+      const ta = document.querySelector('[data-overall]');
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }
+  });
+
   // ---- shared actions (bound to both desktop rail + mobile bottom bar) ----
   const doSave = async () => {
     await saveReview(s.empId, s.reviewerId, {
       status: 'draft',
       answers: s.answers,
+      overallComment: s.overallComment,
       submittedAt: null,
     });
     s.saved = true;
@@ -268,6 +358,14 @@ function wire(container, emp, user, locked, s, qids) {
   };
 
   const openSubmitConfirm = () => {
+    // safety net — the button is already disabled until this holds
+    if (!(s.overallComment && s.overallComment.trim())) {
+      const card = container.querySelector('#grp-overall');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const ta = container.querySelector('[data-overall]');
+      if (ta) ta.focus();
+      return;
+    }
     const m = openModal({
       title: 'Xác nhận nộp đánh giá',
       subtitle: `Đánh giá cho ${emp.name} sẽ được khóa sau khi nộp.`,
@@ -288,7 +386,7 @@ function wire(container, emp, user, locked, s, qids) {
     });
     m.body.querySelector('[data-cancel]').addEventListener('click', m.close);
     m.body.querySelector('[data-confirm]').addEventListener('click', async () => {
-      await saveReview(s.empId, s.reviewerId, { status: 'submitted', answers: s.answers });
+      await saveReview(s.empId, s.reviewerId, { status: 'submitted', answers: s.answers, overallComment: s.overallComment });
       m.close();
       clearReviewSession();
       nav('/myreviews');
@@ -319,15 +417,15 @@ function openSectionsSheet(s, qids, goto) {
       <div class="sheet-body" style="display:flex;flex-direction:column;gap:2px;padding:0 12px 8px">
         ${state.groups.map((g, gi) => {
           const color = GROUP_COLORS[gi % GROUP_COLORS.length];
-          const gAns = g.items.filter(q => s.answers[q.id] && s.answers[q.id].score != null).length;
-          const gDone = g.items.length > 0 && gAns === g.items.length;
+          const st = groupRailStats(g, s);
           return `
-          <button class="group-nav-item" data-sheet-goto="${esc(g.id)}" style="padding:12px 10px;border-left:2px solid ${gDone ? 'var(--ok)' : color}">
-            <span style="width:20px;height:20px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${gDone ? 'var(--ok)' : color + '22'};color:${gDone ? '#fff' : color}">
-              ${gDone ? icon('check', { size: 12, stroke: 3 }) : `<span style="font-size:11px;font-weight:700">${gi + 1}</span>`}
+          <button class="group-nav-item" data-sheet-goto="${esc(g.id)}" style="padding:12px 10px;border-left:2px solid ${st.done ? 'var(--ok)' : color};align-items:center">
+            <span style="width:20px;height:20px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${st.done ? 'var(--ok)' : color + '22'};color:${st.done ? '#fff' : color}">
+              ${st.done ? icon('check', { size: 12, stroke: 3 }) : `<span style="font-size:11px;font-weight:700">${gi + 1}</span>`}
             </span>
-            <span style="flex:1;font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left">${esc(g.name)}</span>
-            <span style="font-size:12px;font-weight:700;color:${gDone ? 'var(--ok)' : 'var(--faint)'}">${gAns}/${g.items.length}</span>
+            <span style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left">${esc(g.name)}</span>
+            ${st.avgStr != null ? avgChip(st, { big: true }) : ''}
+            <span style="font-size:12px;font-weight:700;color:${st.done ? 'var(--ok)' : 'var(--faint)'};flex-shrink:0">${st.ans}/${st.total}</span>
           </button>`;
         }).join('')}
       </div>

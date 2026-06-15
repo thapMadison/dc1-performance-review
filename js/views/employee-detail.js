@@ -7,14 +7,21 @@
 
 import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS } from '../ui.js';
 import {
-  state, reviewerIdsOf, avgForQuestion, finalForQuestion, empAvg,
+  state, reviewerIdsOf, avgForQuestion, finalForQuestion,
   isFractional, fractionalQuestionsOf,
   setFinal, resetFinal, resetAllFinals, assignReviewers,
+  groupStats, weightedFinal, totalWeight, classify, bands,
 } from '../store.js';
 import { inLeaderDept } from '../auth.js';
 import { nav } from '../router.js';
 
+const BAND_COLORS = { A: 'var(--ok)', B: 'var(--blue)', C: '#E8A020', D: '#E06030', E: 'var(--danger)' };
+const BAND_BGS    = { A: '#E6F6EF', B: '#E8F6FC', C: '#FDF3E0', D: '#FDEEE8', E: '#FBEAEA' };
+
 export function renderEmployeeDetail(container, empId, user) {
+  // Run this page wider so the inline per-question comments are readable.
+  // (data-content is rebuilt every render, so this never leaks to other views.)
+  container.classList.add('app-content--wide');
   const emp = state.employees.find(e => e.id === empId);
   if (!emp) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'help', title: 'Không tìm thấy nhân viên', desc: 'Nhân viên này không còn trong danh sách.' })}</div>`;
@@ -30,7 +37,9 @@ export function renderEmployeeDetail(container, empId, user) {
   const assigned = reviewerIdsOf(emp).map(id => state.employees.find(e => e.id === id)).filter(Boolean);
   const submitted = assigned.filter(u => empReviews[u.id] && empReviews[u.id].status === 'submitted');
   const overrides = state.finals[empId] || {};
-  const avg = empAvg(empId);
+  const final = weightedFinal(empId);
+  const band = classify(final);
+  const bandColor = id => BAND_COLORS[id] || 'var(--sub)';
   const allSubmitted = assigned.length > 0 && submitted.length === assigned.length;
   const anyEdited = Object.values(overrides).some(x => x && x.edited);
   const fractional = fractionalQuestionsOf(empId);
@@ -53,8 +62,8 @@ export function renderEmployeeDetail(container, empId, user) {
         </div>
         <div class="detail-stats" style="display:contents">
         <div class="detail-stat" style="text-align:center;padding:0 24px;border-right:1px solid var(--line)">
-          <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">Điểm Final</div>
-          ${scoreChip(avg, { size: 'lg', muted: !allSubmitted })}
+          <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">Điểm Final${band ? ` · <span style="color:${bandColor(band.id)}">${esc(band.label)}</span>` : ''}</div>
+          ${scoreChip(final, { size: 'lg', muted: !allSubmitted })}
         </div>
         <div class="detail-stat" style="text-align:center;padding:0 8px 0 24px">
           <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">Reviewer</div>
@@ -91,7 +100,11 @@ export function renderEmployeeDetail(container, empId, user) {
     ${submitted.length === 0
       ? `<div class="card">${emptyState({ icon: 'clipboard', title: 'Chưa có đánh giá nào được nộp', desc: 'Bảng điểm và điểm final sẽ xuất hiện khi reviewer nộp bản đánh giá.' })}</div>`
       : `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      ${groupOverviewHtml(empId)}
+
+      <div style="margin-bottom:22px">${resultBarHtml(empId)}</div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:14px;flex-wrap:wrap">
         <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Bảng điểm chi tiết</h2>
         <div style="font-size:12.5px;color:var(--sub);display:flex;align-items:center;gap:6px">
           ${canEdit
@@ -132,7 +145,7 @@ export function renderEmployeeDetail(container, empId, user) {
               const auto = avgForQuestion(empId, q.id);
               const fin = finalForQuestion(empId, q.id);
               return `
-              <div class="sr-row" style="${GRID};padding:11px 22px;border-bottom:1px solid var(--line);align-items:center">
+              <div class="sr-row" style="${GRID};padding:11px 22px;${qComments(submitted, empReviews, q.id).length ? '' : 'border-bottom:1px solid var(--line);'}align-items:center">
                 <div style="font-size:14px;font-weight:600;color:var(--ink);padding-right:12px">${esc(q.text)}</div>
                 ${submitted.map(u => {
                   const a = empReviews[u.id] && empReviews[u.id].answers && empReviews[u.id].answers[q.id];
@@ -153,20 +166,12 @@ export function renderEmployeeDetail(container, empId, user) {
                     </button>`;
                   })()}
                 </div>
-              </div>`;
+              </div>
+              ${qCommentsHtml(submitted, empReviews, q.id)}`;
             }).join('')}
             </div>
           </div>`;
         }).join('')}
-
-        <div class="card" style="padding:0;overflow:hidden">
-          <div class="sr-row" style="${GRID};padding:14px 22px;background:var(--navy);align-items:center">
-            <div style="font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.01em">Điểm trung bình tổng</div>
-            ${submitted.map(() => '<div></div>').join('')}
-            <div></div>
-            <div style="display:flex;justify-content:center"><span style="font-size:19px;font-weight:700;color:#fff">${avg != null ? avg : '—'}</span></div>
-          </div>
-        </div>
       </div>
 
       ${canEdit && anyEdited ? `
@@ -176,7 +181,7 @@ export function renderEmployeeDetail(container, empId, user) {
         <button class="text-underline-btn" data-reset-all style="color:var(--blue);font-weight:700;margin-left:4px">Đặt lại tất cả về trung bình</button>
       </div>` : ''}
 
-      <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin:32px 0 14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Nhận xét từ reviewer</h2>
+      <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin:32px 0 14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Nhận xét tổng quan từ reviewer</h2>
       <div style="display:flex;flex-direction:column;gap:12px">
         ${commentsHtml(submitted, empReviews)}
       </div>`}
@@ -185,26 +190,201 @@ export function renderEmployeeDetail(container, empId, user) {
   wire(container, emp, user);
 }
 
-function commentsHtml(submitted, empReviews) {
-  const comments = [];
-  submitted.forEach(u => {
-    state.groups.forEach(g => g.items.forEach(q => {
-      const a = empReviews[u.id] && empReviews[u.id].answers && empReviews[u.id].answers[q.id];
-      if (a && a.comment && a.comment.trim()) comments.push({ u, q, text: a.comment });
-    }));
-  });
-  if (!comments.length) {
-    return `<div class="card"><div style="font-size:13.5px;color:var(--sub);text-align:center;padding:8px 0">Chưa có nhận xét nào.</div></div>`;
-  }
-  return comments.map(c => `
-    <div class="card" style="padding:18px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
-        ${avatar(c.u.name, 28)}
-        <span style="font-size:13.5px;font-weight:700;color:var(--ink)">${esc(c.u.name)}</span>
-        <span style="font-size:12px;color:var(--faint)">về</span>
-        <span style="font-size:12.5px;font-weight:600;color:var(--blue);background:var(--blue-hi);padding:2px 8px;border-radius:5px">${esc(c.q.text)}</span>
+/* ---------- Weighted result helpers ---------- */
+
+// 2-decimal display formatter (computation always uses raw values upstream)
+const fmt2 = v => v == null ? '—' : (Math.round(v * 100) / 100).toFixed(2);
+
+// Inline group overview strip: per-group average score + weight chips.
+// Shown above the score table so reviewers/managers see the group breakdown.
+function groupOverviewHtml(empId) {
+  const stats = groupStats(empId);
+  if (!stats.length) return '';
+  return `
+    <div class="card" style="padding:16px 18px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px">
+        <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">Tổng quan theo nhóm</div>
+        <div style="font-size:12px;font-weight:600;color:var(--sub)">Điểm TB từng nhóm câu hỏi</div>
       </div>
-      <div style="font-size:14px;color:var(--ink);line-height:1.55;padding-left:38px">"${esc(c.text)}"</div>
+      <div class="grp-overview-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        ${stats.map((s, gi) => {
+          const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+          return `
+          <div style="border:1px solid var(--line);border-left:3px solid ${color};border-radius:8px;padding:11px 13px;background:#FAFBFC">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+              <span style="font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.group.name)}</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:5px">
+              <span style="font-size:21px;font-weight:700;color:var(--ink);letter-spacing:-0.02em">${fmt2(s.avg)}</span>
+              <span style="font-size:11px;color:var(--faint);font-weight:600">/5</span>
+              <span style="margin-left:auto;font-size:11.5px;font-weight:700;color:${color}">${s.weight}%</span>
+            </div>
+            <div style="font-size:11px;color:var(--sub);margin-top:3px">Đã chấm ${s.scored}/${s.total}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// Final result bar (replaces the old plain-average navy row): weighted final +
+// classification chip + a button to open the detailed breakdown modal.
+function resultBarHtml(empId) {
+  const final = weightedFinal(empId);
+  const band = classify(final);
+  return `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:18px;padding:16px 22px;background:var(--navy);flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">Kết quả cuối cùng (có trọng số)</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.7)">Σ (điểm TB nhóm × trọng số)</div>
+        </div>
+        ${band ? `<span style="display:inline-flex;align-items:center;gap:7px;background:${BAND_BGS[band.id]};border:1.5px solid ${BAND_COLORS[band.id]};padding:6px 12px;border-radius:999px">
+          <span style="width:22px;height:22px;border-radius:50%;background:${BAND_COLORS[band.id]};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(band.id)}</span>
+          <span style="font-size:13px;font-weight:700;color:${BAND_COLORS[band.id]}">${esc(band.label)}</span>
+        </span>` : ''}
+        <div style="display:flex;align-items:baseline;gap:3px">
+          <span style="font-size:26px;font-weight:700;color:#fff;letter-spacing:-0.02em">${fmt2(final)}</span>
+          <span style="font-size:13px;color:rgba(255,255,255,0.6);font-weight:600">/5</span>
+        </div>
+        ${btn({ label: 'Chi tiết', variant: 'soft', size: 'sm', icon: 'grid', attrs: 'data-result' })}
+      </div>
+    </div>`;
+}
+
+/* ---------- Result breakdown modal (matches the design overview) ---------- */
+function openResultModal(empId) {
+  const stats = groupStats(empId);
+  const final = weightedFinal(empId);
+  const band = classify(final);
+  const sumW = totalWeight();
+  const allBands = bands();
+
+  const formula = stats
+    .filter(s => s.weight)
+    .map(s => `(${esc(s.group.name)} × ${s.weight}%)`)
+    .join(' + ') || '—';
+
+  const m = openModal({
+    title: 'Kết quả tạm tính (Result)',
+    subtitle: 'Dựa trên điểm hiện tại — cập nhật khi chấm thêm tiêu chí.',
+    width: 620,
+    contentHtml: `
+      <div style="padding:8px 24px 24px">
+        <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:16px">
+          <div style="display:grid;grid-template-columns:2fr 0.8fr 0.9fr 0.8fr 1fr;gap:0;padding:11px 16px;background:#FAFBFC;font-size:10.5px;font-weight:700;color:var(--faint);letter-spacing:0.05em;text-transform:uppercase">
+            <div>Nhóm tiêu chí</div>
+            <div style="text-align:center">Đã chấm</div>
+            <div style="text-align:center">Điểm TB nhóm</div>
+            <div style="text-align:center">Trọng số</div>
+            <div style="text-align:right">Điểm có trọng số</div>
+          </div>
+          ${stats.map((s, gi) => {
+            const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+            return `
+            <div style="display:grid;grid-template-columns:2fr 0.8fr 0.9fr 0.8fr 1fr;gap:0;padding:13px 16px;border-top:1px solid var(--line);align-items:center;font-size:13.5px">
+              <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:var(--ink)">
+                <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.group.name)}</span>
+              </div>
+              <div style="text-align:center;color:var(--sub);font-weight:600">${s.scored}/${s.total}</div>
+              <div style="text-align:center;font-weight:700;color:var(--ink)">${fmt2(s.avg)}</div>
+              <div style="text-align:center;color:var(--sub);font-weight:600">${s.weight}%</div>
+              <div style="text-align:right;font-weight:700;color:var(--ink)">${fmt2(s.weighted)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 15px;background:var(--warn-bg);border:1px solid #EFD9AE;border-radius:9px;margin-bottom:18px">
+          ${icon('alert', { size: 16, color: 'var(--warn)', stroke: 2.2, style: 'flex-shrink:0;margin-top:1px' })}
+          <div style="font-size:12.5px;color:#8A5A12;line-height:1.55">
+            <div>• Điểm hiển thị tại từng nhóm là điểm trung bình (chưa nhân trọng số).</div>
+            <div><b>Kết quả cuối cùng</b> = ${formula}. (Có thể sai lệch nhẹ do quy tắc làm tròn.)</div>
+            ${sumW !== 100 ? `<div style="margin-top:3px;font-weight:700">⚠ Tổng trọng số hiện là ${fmt2(sumW)}% (khác 100%).</div>` : ''}
+          </div>
+        </div>
+
+        <div style="border:1.5px solid ${band ? BAND_COLORS[band.id] : 'var(--ok)'};background:${band ? BAND_BGS[band.id] : '#E6F6EF'};border-radius:12px;padding:18px;text-align:center;margin-bottom:18px">
+          <div style="font-size:34px;font-weight:700;color:${band ? BAND_COLORS[band.id] : 'var(--ok)'};letter-spacing:-0.03em">${fmt2(final)}<span style="font-size:16px;color:var(--faint);font-weight:600"> / 5.00</span></div>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px">Thang phân loại</div>
+        <div style="display:grid;grid-template-columns:repeat(${allBands.length},1fr);gap:8px;margin-bottom:16px">
+          ${allBands.map(b => {
+            const c = BAND_COLORS[b.id] || 'var(--sub)';
+            const bg = BAND_BGS[b.id] || '#FAFBFC';
+            const on = band && b.id === band.id;
+            return `
+            <div style="border:1.5px solid ${on ? c : 'var(--line)'};border-radius:10px;padding:12px 6px;text-align:center;background:${on ? bg : '#FAFBFC'};transition:border-color .15s,background .15s">
+              <div style="width:34px;height:34px;border-radius:50%;margin:0 auto 7px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;background:${on ? c : '#E3E7EC'};color:${on ? '#fff' : 'var(--faint)'}">${esc(b.id)}</div>
+              <div style="font-size:12px;font-weight:700;color:${on ? 'var(--ink)' : 'var(--sub)'}">${esc(b.label)}</div>
+              <div style="font-size:11px;color:${on ? c : 'var(--faint)'};margin-top:2px;opacity:${on ? 1 : 0.8}">${fmt2(b.min)} - ${fmt2(b.max)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;background:#EEF1F8;border-radius:8px;font-size:12.5px;color:#3D4B66">
+          ${icon('help', { size: 15, color: '#5B6B8A', style: 'flex-shrink:0' })}
+          <span><b>Note:</b> Tiêu chí chưa chấm tính điểm 0.</span>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:18px">
+          ${btn({ label: 'Đóng', variant: 'soft', attrs: 'data-close' })}
+        </div>
+      </div>`,
+  });
+
+  m.body.querySelector('[data-close]').addEventListener('click', m.close);
+}
+
+// Per-question comments from submitted reviewers (for the inline row).
+function qComments(submitted, empReviews, qid) {
+  const out = [];
+  submitted.forEach(u => {
+    const a = empReviews[u.id] && empReviews[u.id].answers && empReviews[u.id].answers[qid];
+    if (a && a.comment && a.comment.trim()) out.push({ u, text: a.comment.trim() });
+  });
+  return out;
+}
+
+// Inline comment block rendered directly under a question's score row.
+function qCommentsHtml(submitted, empReviews, qid) {
+  const cs = qComments(submitted, empReviews, qid);
+  if (!cs.length) return '';
+  return `
+    <div class="sr-qcomments">
+      ${cs.map(c => `
+      <div class="sr-qcomment">
+        ${avatar(c.u.name, 24)}
+        <div style="flex:1;min-width:0">
+          <span class="sr-qc-name">${esc(c.u.name)}</span>
+          <div class="sr-qc-text">${esc(c.text)}</div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+}
+
+// Bottom section: each reviewer's overall comment (per-question explanations
+// now live inline with their question in the score table). Reviewers with no
+// overall comment are skipped.
+function commentsHtml(submitted, empReviews) {
+  const blocks = submitted.map(u => {
+    const r = empReviews[u.id] || {};
+    const overall = r.overallComment && r.overallComment.trim() ? r.overallComment.trim() : null;
+    return { u, overall };
+  }).filter(b => b.overall);
+
+  if (!blocks.length) {
+    return `<div class="card"><div style="font-size:13.5px;color:var(--sub);text-align:center;padding:8px 0">Chưa có nhận xét tổng quan nào.</div></div>`;
+  }
+
+  return blocks.map(b => `
+    <div class="card" style="padding:18px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        ${avatar(b.u.name, 30)}
+        <span style="font-size:14px;font-weight:700;color:var(--ink)">${esc(b.u.name)}</span>
+      </div>
+      <div style="font-size:14px;color:var(--ink);line-height:1.6;white-space:pre-wrap">${esc(b.overall)}</div>
     </div>`).join('');
 }
 
@@ -215,6 +395,9 @@ function wire(container, emp, user) {
 
   const resetAll = container.querySelector('[data-reset-all]');
   if (resetAll) resetAll.addEventListener('click', () => resetAllFinals(emp.id));
+
+  const resultBtn = container.querySelector('[data-result]');
+  if (resultBtn) resultBtn.addEventListener('click', () => openResultModal(emp.id));
 
   // group collapse / expand
   container.querySelectorAll('[data-ed-toggle]').forEach(btn => {
