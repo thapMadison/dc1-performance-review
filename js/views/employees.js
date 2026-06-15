@@ -55,7 +55,7 @@ export function renderEmployees(container, user) {
     </div>
 
     <div class="card" style="padding:0;overflow:hidden">
-      <div style="${GRID};padding:13px 22px;background:#FAFBFC;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">
+      <div class="emp-grid-head" style="${GRID};padding:13px 22px;background:#FAFBFC;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">
         <div>Nhân viên</div><div>Phòng ban</div><div>Reviewer</div><div>Điểm final</div><div style="text-align:right">Tiến độ</div>
       </div>
       ${list.map((e, i) => {
@@ -64,8 +64,8 @@ export function renderEmployees(container, user) {
         const fullDone = p.assigned > 0 && p.submitted === p.assigned;
         const fracN = fractionalQuestionsOf(e.id).length;
         return `
-        <div class="row-hover${fracN ? ' row-warn' : ''}" data-emp="${esc(e.id)}" style="${GRID};align-items:center;padding:14px 22px;${i < list.length - 1 ? 'border-bottom:1px solid var(--line);' : ''}">
-          <div style="display:flex;align-items:center;gap:12px;min-width:0">
+        <div class="row-hover emp-row${fracN ? ' row-warn' : ''}" data-emp="${esc(e.id)}" style="${GRID};align-items:center;padding:14px 22px;${i < list.length - 1 ? 'border-bottom:1px solid var(--line);' : ''}">
+          <div class="emp-cell-name" style="display:flex;align-items:center;gap:12px;min-width:0">
             ${avatar(e.name, 38)}
             <div style="min-width:0">
               <div style="display:flex;align-items:center;gap:6px;min-width:0">
@@ -77,19 +77,19 @@ export function renderEmployees(container, user) {
               <div style="font-size:12.5px;color:var(--sub)">${esc(e.title)}</div>
             </div>
           </div>
-          <div style="font-size:13.5px;color:var(--ink);font-weight:600">${esc(e.dept || '—')}</div>
-          <div>
+          <div class="emp-cell-dept" style="font-size:13.5px;color:var(--ink);font-weight:600">${esc(e.dept || '—')}</div>
+          <div class="emp-cell-reviewer">
             ${p.assigned
               ? `<span style="font-size:13px;color:var(--sub);font-weight:600">${p.assigned} người</span>`
               : `<span style="font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-bg);padding:3px 9px;border-radius:5px">Chưa phân công</span>`}
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
+          <div class="emp-cell-final" style="display:flex;align-items:center;gap:8px">
             ${scoreChip(avg, { muted: !fullDone })}
             ${fracN
               ? `<span class="warn-chip" title="${fracN} câu có điểm trung bình lẻ — cần làm tròn điểm final">${icon('alert', { size: 12, color: 'var(--warn)', stroke: 2.4 })}${fracN} câu lẻ</span>`
               : ''}
           </div>
-          <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px">
+          <div class="emp-cell-progress" style="display:flex;justify-content:flex-end;align-items:center;gap:8px">
             ${p.assigned
               ? `<span style="font-size:13px;font-weight:700;color:${fullDone ? 'var(--ok)' : 'var(--sub)'}">${p.submitted}/${p.assigned}</span>`
               : `<span style="color:var(--faint)">—</span>`}

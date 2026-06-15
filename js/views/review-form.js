@@ -54,7 +54,7 @@ export function renderReviewForm(container, user, empId) {
   const complete = qids.length > 0 && ans === qids.length;
 
   container.innerHTML = `
-  <div style="display:flex;gap:32px;align-items:flex-start">
+  <div class="review-layout" style="display:flex;gap:32px;align-items:flex-start">
     <div style="flex:1;min-width:0">
       <button class="back-btn" data-back>← Danh sách đánh giá</button>
 
@@ -104,7 +104,7 @@ export function renderReviewForm(container, user, empId) {
       </div>`).join('')}
     </div>
 
-    <div style="width:264px;flex-shrink:0;position:sticky;top:0;padding-top:52px">
+    <div class="review-rail" style="width:264px;flex-shrink:0;position:sticky;top:0;padding-top:52px">
       <div class="card card-hi" style="padding:20px">
         <div class="hi-tri" style="background:color-mix(in srgb, ${complete ? 'var(--ok)' : 'var(--blue)'} 11%, transparent)"></div>
         <div class="hi-body">
@@ -132,7 +132,7 @@ export function renderReviewForm(container, user, empId) {
         </div>
 
         ${!locked ? `
-        <div style="display:flex;flex-direction:column;gap:9px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+        <div class="rail-actions" style="display:flex;flex-direction:column;gap:9px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
           ${btn({ label: complete ? 'Nộp đánh giá' : `Còn ${qids.length - ans} câu`, variant: 'primary', full: true, icon: complete ? 'check' : undefined, disabled: !complete, attrs: 'data-submit' })}
           ${btn({ label: s.saved ? 'Đã lưu nháp' : 'Lưu bản nháp', variant: 'ghost', full: true, icon: s.saved ? 'check' : undefined, attrs: 'data-save' })}
         </div>` : ''}
@@ -145,6 +145,25 @@ export function renderReviewForm(container, user, empId) {
         Sau khi nộp, bạn sẽ không thể chỉnh sửa.
       </div>` : ''}
     </div>
+
+    <div class="review-bottombar">
+      <button class="bb-toc" data-toc title="Mục lục" aria-label="Mục lục">
+        ${icon('grid', { size: 18, color: 'var(--sub)', stroke: 2.2 })}
+      </button>
+      <div class="bb-progress">
+        <div style="display:flex;align-items:baseline;gap:5px;margin-bottom:5px">
+          <span style="font-size:16px;font-weight:700;color:${complete ? 'var(--ok)' : 'var(--blue)'};letter-spacing:-0.02em">${pct}%</span>
+          <span style="font-size:11.5px;color:var(--sub);font-weight:600">${ans}/${qids.length} câu</span>
+        </div>
+        ${progress(ans, qids.length, complete ? 'var(--ok)' : 'var(--blue)', 6)}
+      </div>
+      ${locked
+        ? `<span class="pill pill-locked" style="height:40px;padding:0 14px">${icon('lock', { size: 13, color: '#4B3F9E' })} Đã khóa</span>`
+        : `<div class="bb-actions">
+            ${btn({ label: 'Lưu', variant: 'ghost', size: 'md', attrs: 'data-save-m' })}
+            ${btn({ label: complete ? 'Nộp' : `Còn ${qids.length - ans}`, variant: 'primary', size: 'md', icon: complete ? 'check' : undefined, disabled: !complete, attrs: 'data-submit-m' })}
+          </div>`}
+    </div>
   </div>`;
 
   wire(container, emp, user, locked, s, qids);
@@ -153,12 +172,27 @@ export function renderReviewForm(container, user, empId) {
 function wire(container, emp, user, locked, s, qids) {
   container.querySelector('[data-back]').addEventListener('click', () => nav('/myreviews'));
 
-  // group anchors — scroll within the app scroller (plain # links would fight the hash router)
+  // jump to a group anchor inside the app scroller (plain # links would fight the hash router)
+  const goto = id => {
+    const el = container.querySelector(`#grp-${CSS.escape(id)}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  // group anchors (rail list on desktop)
   container.querySelectorAll('[data-goto]').forEach(b =>
-    b.addEventListener('click', () => {
-      const el = container.querySelector(`#grp-${CSS.escape(b.dataset.goto)}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }));
+    b.addEventListener('click', () => goto(b.dataset.goto)));
+  // mobile "Mục lục" → sections bottom-sheet (reuses goto)
+  const tocBtn = container.querySelector('[data-toc]');
+  if (tocBtn) tocBtn.addEventListener('click', () => openSectionsSheet(s, qids, goto));
+
+  // show fixed bottom bar only after rail card scrolls out of viewport (phone only)
+  const bottombar = container.querySelector('.review-bottombar');
+  const rail = container.querySelector('.review-rail');
+  if (bottombar && rail && window.matchMedia('(max-width: 640px)').matches) {
+    const obs = new IntersectionObserver(([entry]) => {
+      bottombar.classList.toggle('review-bottombar--visible', !entry.isIntersecting);
+    }, { threshold: 0 });
+    obs.observe(rail);
+  }
 
   if (locked) return;
 
@@ -200,8 +234,8 @@ function wire(container, emp, user, locked, s, qids) {
       if (ta) ta.focus();
     }));
 
-  const saveBtn = container.querySelector('[data-save]');
-  if (saveBtn) saveBtn.addEventListener('click', async () => {
+  // ---- shared actions (bound to both desktop rail + mobile bottom bar) ----
+  const doSave = async () => {
     await saveReview(s.empId, s.reviewerId, {
       status: 'draft',
       answers: s.answers,
@@ -210,10 +244,9 @@ function wire(container, emp, user, locked, s, qids) {
     s.saved = true;
     requestRender();
     setTimeout(() => { if (session === s) { s.saved = false; requestRender(); } }, 2200);
-  });
+  };
 
-  const submitBtn = container.querySelector('[data-submit]');
-  if (submitBtn) submitBtn.addEventListener('click', () => {
+  const openSubmitConfirm = () => {
     const m = openModal({
       title: 'Xác nhận nộp đánh giá',
       subtitle: `Đánh giá cho ${emp.name} sẽ được khóa sau khi nộp.`,
@@ -239,5 +272,57 @@ function wire(container, emp, user, locked, s, qids) {
       clearReviewSession();
       nav('/myreviews');
     });
-  });
+  };
+
+  // desktop rail buttons + mobile bottom-bar buttons share the same handlers
+  container.querySelectorAll('[data-save], [data-save-m]').forEach(b =>
+    b.addEventListener('click', doSave));
+  container.querySelectorAll('[data-submit], [data-submit-m]').forEach(b =>
+    b.addEventListener('click', openSubmitConfirm));
+}
+
+/* ---------- Sections bottom-sheet (phone) — jump between question groups ----------
+   Slides up from the bottom; reuses the group-nav-item styling and the `goto`
+   helper so jumping behaves exactly like the desktop rail. */
+function openSectionsSheet(s, qids, goto) {
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  const ansTotal = qids.filter(q => s.answers[q] && s.answers[q].score != null).length;
+  overlay.innerHTML = `
+    <div class="sheet-panel">
+      <div class="sheet-handle"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 20px 14px">
+        <div style="font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-0.02em">Mục lục</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--sub)">${ansTotal}/${qids.length} câu</div>
+      </div>
+      <div class="sheet-body" style="display:flex;flex-direction:column;gap:2px;padding:0 12px 8px">
+        ${state.groups.map((g, gi) => {
+          const gAns = g.items.filter(q => s.answers[q.id] && s.answers[q.id].score != null).length;
+          const gDone = g.items.length > 0 && gAns === g.items.length;
+          return `
+          <button class="group-nav-item" data-sheet-goto="${esc(g.id)}" style="padding:12px 10px">
+            <span style="width:20px;height:20px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${gDone ? 'var(--ok)' : (gAns ? '#29ABE21A' : '#EEF1F4')};color:${gDone ? '#fff' : (gAns ? 'var(--blue)' : 'var(--faint)')}">
+              ${gDone ? icon('check', { size: 12, stroke: 3 }) : `<span style="font-size:11px;font-weight:700">${gi + 1}</span>`}
+            </span>
+            <span style="flex:1;font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left">${esc(g.name)}</span>
+            <span style="font-size:12px;font-weight:700;color:${gDone ? 'var(--ok)' : 'var(--faint)'}">${gAns}/${g.items.length}</span>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  function close() {
+    overlay.classList.remove('open');
+    window.removeEventListener('keydown', onKey);
+    setTimeout(() => overlay.remove(), 240);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.querySelectorAll('[data-sheet-goto]').forEach(b =>
+    b.addEventListener('click', () => { close(); goto(b.dataset.sheetGoto); }));
+  window.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
+  // next frame → trigger slide-up transition
+  requestAnimationFrame(() => overlay.classList.add('open'));
 }

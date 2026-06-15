@@ -166,8 +166,8 @@ export function openImportModal(kind) {
         <button class="text-underline-btn" data-reset>Chọn lại</button>
       </div>
 
-      <div style="border:1px solid var(--line);border-radius:9px;overflow:hidden;max-height:280px;overflow-y:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <div style="border:1px solid var(--line);border-radius:9px;max-height:280px;overflow:auto">
+        <table style="width:100%;min-width:520px;border-collapse:collapse;font-size:13px">
           <thead>
             <tr style="background:var(--bg);position:sticky;top:0">
               ${cols.map(c => `<th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--sub);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid var(--line)">${esc(c)}</th>`).join('')}
@@ -198,8 +198,8 @@ export function openImportModal(kind) {
         </table>
       </div>
 
-      <div style="display:flex;align-items:center;gap:10px;margin-top:18px">
-        <div style="flex:1;font-size:12.5px;color:var(--warn);display:flex;align-items:center;gap:6px">
+      <div style="display:flex;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px;font-size:12.5px;color:var(--warn);display:flex;align-items:center;gap:6px">
           ${icon('help', { size: 14, color: 'var(--warn)' })} Import sẽ thay thế toàn bộ ${kind === 'questions' ? 'bộ câu hỏi' : 'danh sách nhân viên'} hiện tại.
         </div>
         ${btn({ label: 'Huỷ', variant: 'soft', attrs: 'data-reset' })}

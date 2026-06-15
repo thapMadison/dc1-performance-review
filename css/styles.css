@@ -260,3 +260,176 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 .group-nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 6px; text-decoration: none; transition: background .13s; border: none; background: transparent; width: 100%; cursor: pointer; text-align: left; }
 .group-nav-item:hover { background: #F3F6F9; }
 .text-underline-btn { background: none; border: none; color: var(--sub); font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline; }
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE — mobile top-bar + drawer sidebar, fluid layouts.
+   Breakpoints: ≤960px (tablet) · ≤640px (phone)
+═══════════════════════════════════════════════════════════════ */
+
+/* mobile top-bar + drawer scaffolding (hidden on desktop) */
+.topbar { display: none; }
+.sidebar-scrim { display: none; }
+.review-bottombar { display: none; }  /* review-form mobile action bar — phone only */
+
+/* ---------- Sections bottom-sheet (review form, phone) ---------- */
+.sheet-overlay {
+  position: fixed; inset: 0; z-index: 110; background: rgba(15,23,41,0.5);
+  display: flex; align-items: flex-end; opacity: 0; transition: opacity .24s;
+}
+.sheet-overlay.open { opacity: 1; }
+.sheet-panel {
+  width: 100%; background: var(--surface); border-radius: 16px 16px 0 0;
+  box-shadow: 0 -12px 40px rgba(15,23,41,0.28); padding: 10px 0 calc(12px + env(safe-area-inset-bottom));
+  max-height: 72vh; overflow-y: auto; transform: translateY(100%); transition: transform .26s cubic-bezier(.2,.8,.2,1);
+}
+.sheet-overlay.open .sheet-panel { transform: translateY(0); }
+.sheet-handle { width: 40px; height: 4px; border-radius: 3px; background: var(--line-hi); margin: 6px auto 8px; }
+
+/* generic helper hooks added to inline-styled rows in the views */
+.stat-row { display: flex; gap: 16px; }            /* KPI / stat card rows */
+.stat-row > * { flex: 1; min-width: 0; }
+
+/* ---------- ≤960px : tablet ---------- */
+@media (max-width: 960px) {
+  .app-content { padding: 32px 28px 80px; }
+
+  /* turn the fixed navy sidebar into an off-canvas drawer */
+  .app-frame { position: relative; }
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 60;
+    transform: translateX(-100%); transition: transform .26s cubic-bezier(.2,.8,.2,1);
+    box-shadow: 0 0 40px rgba(0,0,0,0.4);
+  }
+  .app-frame.nav-open .sidebar { transform: translateX(0); }
+  .sidebar-scrim {
+    display: block; position: fixed; inset: 0; z-index: 55; background: rgba(15,23,41,0.5);
+    opacity: 0; pointer-events: none; transition: opacity .26s;
+  }
+  .app-frame.nav-open .sidebar-scrim { opacity: 1; pointer-events: auto; }
+
+  /* mobile top-bar */
+  .topbar {
+    display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 16px;
+    background: var(--navy); position: sticky; top: 0; z-index: 40; flex-shrink: 0;
+  }
+  .topbar .tb-menu {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; width: 40px; height: 40px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; flex-shrink: 0; color: #fff;
+  }
+  .topbar .tb-menu:hover { background: rgba(255,255,255,0.14); }
+  .topbar .tb-title { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+  .topbar .tb-sub { font-size: 10px; font-weight: 600; color: var(--blue); letter-spacing: 0.14em; text-transform: uppercase; }
+
+  /* stack the app frame so the top-bar sits above the scroll area */
+  .app-frame { flex-direction: column; }
+  .app-scroll { width: 100%; }
+}
+
+/* ---------- ≤640px : phone ---------- */
+@media (max-width: 640px) {
+  .app-content { padding: 20px 16px 72px; }
+
+  /* page heads: title + actions stack, smaller title */
+  .page-head { flex-direction: column; align-items: stretch !important; gap: 16px !important; }
+  .page-head h1 { font-size: 24px !important; }
+  .page-head .page-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .page-head .page-head-actions .btn { flex: 1; }
+
+  /* stat / KPI rows wrap to 2-up (or 1-up for very wide cards) */
+  .stat-row { flex-wrap: wrap; gap: 12px; }
+  .stat-row > * { flex: 1 1 calc(50% - 6px); min-width: calc(50% - 6px); }
+  .stat-row.stat-row-3 > * { flex: 1 1 calc(50% - 6px); }
+
+  /* dashboard company-progress card: stack the deadline aside under the bar */
+  .progress-hero { flex-direction: column; align-items: stretch !important; gap: 18px !important; }
+  .progress-hero .progress-aside {
+    padding-left: 0 !important; border-left: none !important;
+    border-top: 1px solid rgba(255,255,255,0.12); padding-top: 16px !important; text-align: left !important;
+  }
+
+  /* employee-detail header: avatar + name on one row, score/reviewer below */
+  .detail-hero { flex-wrap: wrap; align-items: flex-start !important; gap: 16px !important; }
+  .detail-hero .detail-hero-main { flex: 1 1 100%; align-items: flex-start !important; }
+  .detail-hero .detail-hero-main h1 { font-size: 22px !important; }
+  .detail-hero .detail-stats { display: flex; gap: 28px; flex: 1 1 100%; padding-top: 14px; border-top: 1px solid var(--line); }
+  .detail-hero .detail-stat { padding: 0 !important; border: none !important; text-align: left !important; }
+
+  /* employee-detail score table: scroll the whole card sideways. Every row,
+     group band and the total row share one min-width so columns stay aligned
+     while the whole table scrolls as a unit. */
+  .score-table { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  /* every grid row, group wrapper and band shares one width so the whole
+     table scrolls as one aligned unit */
+  .score-table .sr-row,
+  .score-table .sr-grp,
+  .score-table .sr-band { min-width: 600px; }
+
+  /* employees list: collapse 5-col grid to name + chevron, stack meta below */
+  .emp-grid-head { display: none !important; }
+  .emp-row { grid-template-columns: 1fr auto !important; gap: 6px 10px !important; padding: 14px 16px !important; }
+  .emp-row .emp-cell-dept,
+  .emp-row .emp-cell-reviewer,
+  .emp-row .emp-cell-final { grid-column: 1 / -1; display: flex !important; align-items: center; gap: 8px; }
+  .emp-row .emp-cell-dept::before { content: 'Phòng ban'; }
+  .emp-row .emp-cell-reviewer::before { content: 'Reviewer'; }
+  .emp-row .emp-cell-final::before { content: 'Điểm final'; }
+  .emp-row .emp-cell-dept::before,
+  .emp-row .emp-cell-reviewer::before,
+  .emp-row .emp-cell-final::before {
+    font-size: 11px; font-weight: 700; color: var(--faint); letter-spacing: 0.04em;
+    text-transform: uppercase; min-width: 86px;
+  }
+  .emp-row .emp-cell-progress { justify-self: end; align-self: start; grid-row: 1; grid-column: 2; }
+
+  /* my-reviews row: name on top, progress + status wrap below */
+  .myreview-row { flex-wrap: wrap; gap: 12px 14px !important; padding: 16px !important; }
+  .myreview-main { flex: 1 1 calc(100% - 60px); }
+  .myreview-progress { width: 100% !important; order: 3; }
+  .myreview-status { width: auto !important; order: 4; margin-left: auto; }
+
+  /* review form: drop the 2-col layout, move the progress rail to the top */
+  .review-layout { flex-direction: column; gap: 18px !important; padding-bottom: 86px; }
+  .review-rail { width: 100% !important; position: static !important; padding-top: 0 !important; order: -1; }
+  .review-rail .group-nav-item { padding: 9px 9px; }
+
+  /* fixed bottom action bar: hidden until rail scrolls out of view (JS adds --visible) */
+  .review-bottombar {
+    display: none; align-items: center; gap: 12px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+    background: var(--surface); border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 20px rgba(15,23,41,0.10);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+  .review-bottombar--visible { display: flex; }
+  .review-bottombar .bb-toc {
+    flex-shrink: 0; width: 44px; height: 44px; border-radius: 9px;
+    border: 1.5px solid var(--line); background: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .review-bottombar .bb-toc:hover { background: var(--bg); }
+  .review-bottombar .bb-progress { flex: 1; min-width: 0; }
+  .review-bottombar .bb-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .review-bottombar .bb-actions .btn { min-height: 44px; }
+
+  /* modals fill the screen with breathing room */
+  .modal-overlay { padding: 16px 12px; align-items: flex-start; }
+  .modal-box { width: 100% !important; max-width: 100%; }
+  .modal-head { padding: 18px 18px 16px; }
+
+  /* rating buttons shrink so all 5 fit */
+  .rating-btn { height: 46px; font-size: 16px; }
+
+  /* login: hide the decorative origami panel, center the form */
+  .login-origami { display: none; }
+  .login-screen .login-panel { padding: 0 24px !important; max-width: 100% !important; }
+  .login-screen .login-panel h1 { font-size: 40px !important; }
+  .lo-brand { top: 20px; right: 20px; }
+  .lo-brand .lo-brand-text { display: none; }
+}
+
+/* very small phones */
+@media (max-width: 380px) {
+  .stat-row > * { flex: 1 1 100%; min-width: 100%; }
+  .rating-btn { height: 42px; font-size: 15px; }
+}

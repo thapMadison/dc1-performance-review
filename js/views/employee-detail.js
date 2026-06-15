@@ -43,19 +43,23 @@ export function renderEmployeeDetail(container, empId, user) {
     <div class="card card-hi" style="padding:24px;margin-bottom:22px">
       <div class="hi-tri" style="background:color-mix(in srgb, var(--blue) 11%, transparent)"></div>
       <div class="hi-body">
-      <div style="display:flex;align-items:center;gap:18px">
+      <div class="detail-hero" style="display:flex;align-items:center;gap:18px">
+        <div class="detail-hero-main" style="display:flex;align-items:center;gap:18px;flex:1;min-width:0">
         ${avatar(emp.name, 58)}
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <h1 style="font-size:25px;font-weight:700;color:var(--ink);letter-spacing:-0.03em;line-height:1.05">${esc(emp.name)}</h1>
-          <div style="font-size:14px;color:var(--sub);margin-top:3px">${esc(emp.title)}${emp.dept ? ' · ' + esc(emp.dept) : ''} · ${esc(emp.email)}</div>
+          <div style="font-size:14px;color:var(--sub);margin-top:3px;overflow-wrap:anywhere">${esc(emp.title)}${emp.dept ? ' · ' + esc(emp.dept) : ''} · ${esc(emp.email)}</div>
         </div>
-        <div style="text-align:center;padding:0 24px;border-right:1px solid var(--line)">
+        </div>
+        <div class="detail-stats" style="display:contents">
+        <div class="detail-stat" style="text-align:center;padding:0 24px;border-right:1px solid var(--line)">
           <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">Điểm Final</div>
           ${scoreChip(avg, { size: 'lg', muted: !allSubmitted })}
         </div>
-        <div style="text-align:center;padding:0 8px 0 24px">
+        <div class="detail-stat" style="text-align:center;padding:0 8px 0 24px">
           <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">Reviewer</div>
           <div style="font-size:22px;font-weight:700;color:var(--ink)">${submitted.length}<span style="color:var(--faint);font-size:15px">/${assigned.length || '0'}</span></div>
+        </div>
         </div>
       </div>
       </div>
@@ -104,8 +108,8 @@ export function renderEmployeeDetail(container, empId, user) {
         </div>
       </div>` : ''}
 
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="${GRID};padding:12px 22px;background:#FAFBFC;border-bottom:1px solid var(--line);align-items:center">
+      <div class="card score-table" style="padding:0;overflow:hidden">
+        <div class="sr-row" style="${GRID};padding:12px 22px;background:#FAFBFC;border-bottom:1px solid var(--line);align-items:center">
           <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">Câu hỏi</div>
           ${submitted.map(u => `<div title="${esc(u.name)}" style="display:flex;justify-content:center">${avatar(u.name, 28)}</div>`).join('')}
           <div style="font-size:10px;font-weight:700;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;text-align:center">TB</div>
@@ -113,8 +117,8 @@ export function renderEmployeeDetail(container, empId, user) {
         </div>
 
         ${state.groups.map((g, gi) => `
-          <div>
-            <div style="padding:9px 22px;background:#F3F6F9;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy);letter-spacing:0.02em;display:flex;align-items:center;gap:8px">
+          <div class="sr-grp">
+            <div class="sr-band" style="padding:9px 22px;background:#F3F6F9;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy);letter-spacing:0.02em;display:flex;align-items:center;gap:8px">
               <span style="width:18px;height:18px;border-radius:5px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px">${gi + 1}</span>
               ${esc(g.name)}
             </div>
@@ -122,7 +126,7 @@ export function renderEmployeeDetail(container, empId, user) {
               const auto = avgForQuestion(empId, q.id);
               const fin = finalForQuestion(empId, q.id);
               return `
-              <div style="${GRID};padding:11px 22px;border-bottom:1px solid var(--line);align-items:center">
+              <div class="sr-row" style="${GRID};padding:11px 22px;border-bottom:1px solid var(--line);align-items:center">
                 <div style="font-size:14px;font-weight:600;color:var(--ink);padding-right:12px">${esc(q.text)}</div>
                 ${submitted.map(u => {
                   const a = empReviews[u.id] && empReviews[u.id].answers && empReviews[u.id].answers[q.id];
@@ -148,7 +152,7 @@ export function renderEmployeeDetail(container, empId, user) {
             }).join('')}
           </div>`).join('')}
 
-        <div style="${GRID};padding:14px 22px;background:var(--navy);align-items:center">
+        <div class="sr-row" style="${GRID};padding:14px 22px;background:var(--navy);align-items:center">
           <div style="font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.01em">Điểm trung bình tổng</div>
           ${submitted.map(() => '<div></div>').join('')}
           <div></div>

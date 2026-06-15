@@ -40,14 +40,14 @@ export function renderLogin(container) {
       </div>
 
       <div class="lo-brand">
-        <div style="text-align:right">
+        <div class="lo-brand-text" style="text-align:right">
           <div style="font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.01em;line-height:1.1">Madison</div>
           <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.82);letter-spacing:0.16em;text-transform:uppercase">Technologies</div>
         </div>
         ${logoTile({ size: 58, logoSize: 36, bg: 'rgba(255,255,255,0.16)', border: 'rgba(255,255,255,0.34)' })}
       </div>
 
-      <div style="position:relative;z-index:3;height:100%;display:flex;align-items:center;padding:0 9vw;max-width:620px">
+      <div class="login-panel" style="position:relative;z-index:3;height:100%;display:flex;align-items:center;padding:0 9vw;max-width:620px">
         <div style="width:100%;max-width:400px">
           <div style="display:flex;align-items:center;gap:11px;margin-bottom:40px">
             ${eyebrowMark(13)}

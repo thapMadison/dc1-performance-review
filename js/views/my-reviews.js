@@ -22,7 +22,7 @@ export function renderMyReviews(container, user) {
   container.innerHTML = `
     ${pageHead({ eyebrow: 'Reviewer', title: 'Đánh giá của tôi', desc: `Những nhân viên bạn được phân công đánh giá trong chu kỳ ${APP_CYCLE}.` })}
 
-    <div style="display:flex;gap:16px;margin-bottom:28px">
+    <div class="stat-row stat-row-3" style="margin-bottom:28px">
       ${cards.map(s => hiCard({
         tone: s.c, pad: 18, style: 'flex:1',
         body: `
@@ -42,20 +42,20 @@ export function renderMyReviews(container, user) {
             const pct = qids.length ? Math.round(ans / qids.length * 100) : 0;
             return `
             <div class="card card-hover" style="padding:0;overflow:hidden" data-review="${esc(e.id)}">
-              <div style="display:flex;align-items:center;gap:18px;padding:18px 22px">
+              <div class="myreview-row" style="display:flex;align-items:center;gap:18px;padding:18px 22px">
                 ${avatar(e.name, 46)}
-                <div style="flex:1;min-width:0">
+                <div class="myreview-main" style="flex:1;min-width:0">
                   <div style="font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-0.01em">${esc(e.name)}</div>
                   <div style="font-size:13px;color:var(--sub)">${esc(e.title)}${e.dept ? ' · ' + esc(e.dept) : ''}</div>
                 </div>
-                <div style="width:180px">
+                <div class="myreview-progress" style="width:180px">
                   <div style="display:flex;justify-content:space-between;margin-bottom:6px">
                     <span style="font-size:12px;font-weight:600;color:var(--sub)">${ans}/${qids.length} câu</span>
                     <span style="font-size:12px;font-weight:700;color:${locked ? 'var(--ok)' : 'var(--blue)'}">${pct}%</span>
                   </div>
                   ${progress(ans, qids.length, locked ? 'var(--ok)' : 'var(--blue)')}
                 </div>
-                <div style="width:130px;display:flex;justify-content:flex-end">
+                <div class="myreview-status" style="width:130px;display:flex;justify-content:flex-end">
                   ${statusPill(locked ? 'locked' : status)}
                 </div>
                 ${icon(locked ? 'lock' : 'chevR', { size: 18, color: 'var(--faint)' })}

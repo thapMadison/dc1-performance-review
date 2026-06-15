@@ -30,7 +30,7 @@ export function renderDashboard(container) {
   container.innerHTML = `
     ${pageHead({ eyebrow: 'Manager · Tổng quan', title: `Chu kỳ đánh giá ${APP_CYCLE}`, desc: 'Theo dõi tiến độ đánh giá toàn công ty và điểm số cuối cùng của từng nhân viên.' })}
 
-    <div style="display:flex;gap:16px;margin-bottom:16px">
+    <div class="stat-row" style="margin-bottom:16px">
       ${kpis.map(s => hiCard({
         tone: s.c, pad: 20, style: 'flex:1',
         body: `
@@ -56,7 +56,7 @@ export function renderDashboard(container) {
     <div class="card" style="padding:24px;margin-bottom:28px;background:var(--navy);border:none;position:relative;overflow:hidden">
       <div style="position:absolute;top:0;right:0;width:200px;height:200px;background:#29ABE218;clip-path:polygon(100% 0,100% 100%,30% 0)"></div>
       <div style="position:absolute;top:0;right:0;width:130px;height:200px;background:#29ABE214;clip-path:polygon(100% 0,100% 100%,0 0)"></div>
-      <div style="position:relative;display:flex;align-items:center;gap:28px">
+      <div class="progress-hero" style="position:relative;display:flex;align-items:center;gap:28px">
         <div style="flex:1">
           <div style="font-size:12px;font-weight:700;color:var(--blue);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px">Tiến độ toàn công ty</div>
           <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px">
@@ -67,7 +67,7 @@ export function renderDashboard(container) {
             <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--blue),#5BC6F0);border-radius:8px;transition:width .5s"></div>
           </div>
         </div>
-        <div style="text-align:center;padding-left:28px;border-left:1px solid rgba(255,255,255,0.12)">
+        <div class="progress-aside" style="text-align:center;padding-left:28px;border-left:1px solid rgba(255,255,255,0.12)">
           <div style="font-size:12px;color:#8A99B0;font-weight:600;margin-bottom:4px">Deadline</div>
           <div style="font-size:22px;font-weight:700;color:#fff">${esc(APP_DEADLINE)}</div>
           <div style="font-size:12px;color:#8A99B0">${esc(APP_CYCLE_YEAR)}</div>

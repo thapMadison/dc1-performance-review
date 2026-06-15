@@ -141,7 +141,7 @@ export function progress(value, total, color = 'var(--blue)', height = 6) {
 
 /* ---------- Section header ---------- */
 export function pageHead({ eyebrow, title, desc, actionsHtml = '' }) {
-  return `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;gap:24px;flex-wrap:wrap">
+  return `<div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;gap:24px;flex-wrap:wrap">
     <div>
       ${eyebrow ? `<div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
         ${eyebrowMark()}
@@ -150,7 +150,7 @@ export function pageHead({ eyebrow, title, desc, actionsHtml = '' }) {
       <h1 style="font-size:32px;font-weight:700;color:var(--ink);letter-spacing:-0.03em;line-height:1.05">${esc(title)}</h1>
       ${desc ? `<p style="font-size:14.5px;color:var(--sub);margin-top:8px;line-height:1.5">${esc(desc)}</p>` : ''}
     </div>
-    ${actionsHtml ? `<div style="display:flex;gap:10px">${actionsHtml}</div>` : ''}
+    ${actionsHtml ? `<div class="page-head-actions" style="display:flex;gap:10px">${actionsHtml}</div>` : ''}
   </div>`;
 }
 

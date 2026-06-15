@@ -75,12 +75,45 @@ export function sidebarHtml(user, route) {
   </div>`;
 }
 
+// page title shown in the mobile top-bar
+const PAGE_TITLES = {
+  dashboard: 'Tổng quan',
+  employees: 'Nhân viên',
+  employee: 'Chi tiết nhân viên',
+  questions: 'Bộ câu hỏi',
+  myreviews: 'Đánh giá của tôi',
+  review: 'Đánh giá',
+};
+
+export function topbarHtml(user, route) {
+  return `
+  <div class="topbar">
+    <button class="tb-menu" data-menu aria-label="Mở menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div style="min-width:0;flex:1">
+      <div class="tb-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(PAGE_TITLES[route.page] || 'Madison')}</div>
+      <div class="tb-sub">Madison · Performance</div>
+    </div>
+    ${avatar(user.name, 34)}
+  </div>`;
+}
+
 export function wireSidebar(container) {
+  const frame = container.querySelector('[data-frame]');
+  const closeDrawer = () => { if (frame) frame.classList.remove('nav-open'); };
+  const openDrawer = () => { if (frame) frame.classList.add('nav-open'); };
+
   container.querySelectorAll('[data-nav]').forEach(b =>
-    b.addEventListener('click', () => nav(`/${b.dataset.nav}`)));
+    b.addEventListener('click', () => { closeDrawer(); nav(`/${b.dataset.nav}`); }));
   const out = container.querySelector('[data-logout]');
   if (out) out.addEventListener('click', () => {
     location.hash = '';
     getBackend().logout();
   });
+
+  const menuBtn = container.querySelector('[data-menu]');
+  if (menuBtn) menuBtn.addEventListener('click', openDrawer);
+  const scrim = container.querySelector('[data-scrim]');
+  if (scrim) scrim.addEventListener('click', closeDrawer);
 }

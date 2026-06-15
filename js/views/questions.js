@@ -22,7 +22,7 @@ export function renderQuestions(container) {
       actionsHtml: btn({ label: 'Import câu hỏi', variant: 'primary', icon: 'upload', attrs: 'data-import' }),
     })}
 
-    <div style="display:flex;gap:16px;margin-bottom:26px">
+    <div class="stat-row stat-row-3" style="margin-bottom:26px">
       ${stats.map(s => hiCard({
         tone: 'var(--blue)', pad: 18, style: 'flex:1',
         body: `

@@ -10,7 +10,7 @@ import { setRenderer } from './bus.js';
 import { esc } from './ui.js';
 
 import { renderLogin } from './views/login.js';
-import { sidebarHtml, wireSidebar } from './views/shell.js';
+import { sidebarHtml, wireSidebar, topbarHtml } from './views/shell.js';
 import { renderMyReviews } from './views/my-reviews.js';
 import { renderReviewForm, clearReviewSession } from './views/review-form.js';
 import { renderDashboard } from './views/dashboard.js';
@@ -53,9 +53,13 @@ function render() {
   const prevScroller = root.querySelector('[data-scroll]');
   const prevScroll = prevScroller ? prevScroller.scrollTop : 0;
 
-  root.innerHTML = `<div class="app-frame">
+  root.innerHTML = `<div class="app-frame" data-frame>
     ${sidebarHtml(user, route)}
-    <div class="app-scroll" data-scroll><div class="app-content" data-content></div></div>
+    <div class="sidebar-scrim" data-scrim></div>
+    <div class="app-scroll" data-scroll>
+      ${topbarHtml(user, route)}
+      <div class="app-content" data-content></div>
+    </div>
   </div>`;
   wireSidebar(root);
 
