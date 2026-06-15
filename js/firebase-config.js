@@ -32,4 +32,4 @@ export const APP_DEADLINE_ISO = '2026-07-06T23:59:59'; // parseable; end of the 
 // read-only (view-only) for everyone. Leave null to disable the
 // start-time lock (period considered always-open on the start side).
 export const APP_START_DATE = '16/06/2026';            // display string (DD/MM/YYYY)
-export const APP_START_DATE_ISO = '2026-06-16T12:00:00'; // parseable; start of the period day
+export const APP_START_DATE_ISO = '2026-06-16T00:00:00'; // parseable; start of the period day
