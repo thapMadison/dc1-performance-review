@@ -45,7 +45,7 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 /* ---------- App frame ---------- */
 .app-frame { display: flex; height: 100vh; font-family: var(--font); background: var(--bg); }
 .app-scroll { flex: 1; overflow-y: auto; position: relative; }
-.app-content { max-width: 1160px; margin: 0 auto; padding: 40px 48px 90px; }
+.app-content { max-width: 1440px; margin: 0 auto; padding: 40px 48px 90px; }
 
 /* ---------- Splash ---------- */
 .splash { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: var(--navy); }
@@ -270,16 +270,13 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 .sr-grp-body { overflow: hidden; transition: max-height .28s cubic-bezier(.4,0,.2,1), opacity .22s; max-height: 9999px; opacity: 1; }
 .sr-grp-body--collapsed { max-height: 0 !important; opacity: 0; }
 
-/* Employee detail runs wider so inline per-question comments are readable */
-.app-content--wide { max-width: 1440px; }
-
-/* Inline per-question comment zone — clearly tinted so it reads as a distinct
-   band beneath the (white) question score row */
-.sr-qcomments { padding: 12px 22px 16px; background: #F4F7FB; border-top: 1px dashed var(--line-hi); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+/* Inline per-question comment zone — subtly tinted so it reads as a distinct
+   band beneath the (white) question score row, without adding color noise */
+.sr-qcomments { padding: 11px 22px 15px; background: #FAFBFC; border-top: 1px dashed var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; }
 .sr-qc-label { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; color: var(--faint); letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 1px; }
-/* one reviewer's comment: white chip with a left accent bar in their color */
-.sr-qcomment { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); border-left: 3px solid var(--line-hi); }
-.sr-qcomment .sr-qc-name { font-size: 12.5px; font-weight: 700; white-space: nowrap; display: block; margin-bottom: 2px; }
+/* one reviewer's comment — neutral; the small avatar carries the only color */
+.sr-qcomment { display: flex; gap: 10px; align-items: flex-start; }
+.sr-qcomment .sr-qc-name { font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; display: block; margin-bottom: 2px; }
 .sr-qcomment .sr-qc-text { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
 
 .comment-toggle { margin-top: 12px; background: none; border: none; color: var(--blue); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; }

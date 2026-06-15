@@ -5,7 +5,7 @@
    Fractional auto-averages are flagged so the Manager rounds them.
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, avatarColor, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS } from '../ui.js';
+import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS } from '../ui.js';
 import {
   state, reviewerIdsOf, avgForQuestion, finalForQuestion,
   isFractional, fractionalQuestionsOf,
@@ -19,9 +19,6 @@ const BAND_COLORS = { A: 'var(--ok)', B: 'var(--blue)', C: '#E8A020', D: '#E0603
 const BAND_BGS    = { A: '#E6F6EF', B: '#E8F6FC', C: '#FDF3E0', D: '#FDEEE8', E: '#FBEAEA' };
 
 export function renderEmployeeDetail(container, empId, user) {
-  // Run this page wider so the inline per-question comments are readable.
-  // (data-content is rebuilt every render, so this never leaks to other views.)
-  container.classList.add('app-content--wide');
   const emp = state.employees.find(e => e.id === empId);
   if (!emp) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'help', title: 'Không tìm thấy nhân viên', desc: 'Nhân viên này không còn trong danh sách.' })}</div>`;
@@ -348,25 +345,22 @@ function qComments(submitted, empReviews, qid) {
 }
 
 // Inline comment block rendered directly under a question's score row.
-// Each reviewer's comment is tinted with their own avatar color (accent bar +
-// name) so the question / the comment zone / each reviewer read as distinct.
+// Kept neutral — the only color is each reviewer's small avatar, which is
+// enough to tell them apart without the row turning into a rainbow.
 function qCommentsHtml(submitted, empReviews, qid) {
   const cs = qComments(submitted, empReviews, qid);
   if (!cs.length) return '';
   return `
     <div class="sr-qcomments">
       <div class="sr-qc-label">${icon('chat', { size: 12, color: 'var(--faint)', stroke: 2.2 })} Nhận xét (${cs.length})</div>
-      ${cs.map(c => {
-        const col = avatarColor(c.u.name);
-        return `
-      <div class="sr-qcomment" style="border-left-color:${col};background:color-mix(in srgb, ${col} 5%, #fff)">
-        ${avatar(c.u.name, 24, col)}
+      ${cs.map(c => `
+      <div class="sr-qcomment">
+        ${avatar(c.u.name, 24)}
         <div style="flex:1;min-width:0">
-          <span class="sr-qc-name" style="color:${col}">${esc(c.u.name)}</span>
+          <span class="sr-qc-name">${esc(c.u.name)}</span>
           <div class="sr-qc-text">${esc(c.text)}</div>
         </div>
-      </div>`;
-      }).join('')}
+      </div>`).join('')}
     </div>`;
 }
 
