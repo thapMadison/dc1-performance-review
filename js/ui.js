@@ -3,7 +3,7 @@
    All functions return HTML strings; modals are imperative.
 ═══════════════════════════════════════════════════════════════ */
 
-import { APP_DEADLINE, APP_DEADLINE_ISO } from './firebase-config.js';
+import { APP_DEADLINE, APP_DEADLINE_ISO, APP_START_DATE, APP_START_DATE_ISO } from './firebase-config.js';
 
 export const LOGO = 'assets/logo-gorilla.png';
 
@@ -238,6 +238,18 @@ export function deadlineInfo(nowMs = Date.now()) {
     : `Còn ${hours} giờ ${mins} phút`;
   return { ms, expired: false, days, hours, mins, secs,
     dd: pad2(days), hh: pad2(hours), mm: pad2(mins), ss: pad2(secs), label, tone };
+}
+
+// Whole-app read-only gate. `beforeStart`: now < APP_START_DATE_ISO →
+// everyone view-only (period not opened yet). `expired`: now > APP_DEADLINE_ISO
+// → everyone view-only EXCEPT manager may still edit Final scores.
+// `locked` = beforeStart || expired (convenience for "is the app read-only").
+export function reviewPeriodStatus(nowMs = Date.now()) {
+  const start = APP_START_DATE_ISO ? new Date(APP_START_DATE_ISO).getTime() : null;
+  const end = new Date(APP_DEADLINE_ISO).getTime();
+  const beforeStart = start != null && nowMs < start;
+  const expired = nowMs > end;
+  return { beforeStart, expired, locked: beforeStart || expired, active: !beforeStart && !expired };
 }
 
 // One segment of the dd:hh:mm:ss clock. `unit` keys the live-updating value.

@@ -9,6 +9,10 @@ Web app đánh giá hiệu suất nội bộ cho Madison Technologies — vanill
   - **Manager** — hardcode email trong DB (node `managers`). Thấy tất cả nhân viên + review, import Excel (câu hỏi & nhân viên), phân công reviewer (chọn từ toàn bộ nhân viên, có search), chỉnh sửa điểm final từng câu. Nếu được assign thì cũng làm Reviewer được.
   - **Leader** — hardcode email trong DB (node `leaders`, value = tên phòng ban). Ngoài việc làm Reviewer như nhân viên khác, Leader **xem được kết quả review của tất cả nhân viên trong phòng ban mình** (chỉ xem — không sửa điểm final, không phân công, không import). Xem [seed/README.md](seed/README.md) để thêm Leader.
   - **Reviewer** — tự xác định qua việc được assign cho nhân viên khác. Thấy danh sách được phân công, điền đánh giá (thang 1–5 + nhận xét optional), lưu nháp, nộp → **khóa không sửa được** (khóa cả ở security rules).
+- **Khóa theo thời gian kỳ đánh giá** — cấu hình `APP_START_DATE_ISO` / `APP_DEADLINE_ISO` trong [js/firebase-config.js](js/firebase-config.js):
+  - **Trước `APP_START_DATE_ISO`**: toàn site chỉ-xem cho mọi role (kể cả Manager — không sửa Final, không phân công reviewer, không import).
+  - **Sau `APP_DEADLINE_ISO`**: toàn site chỉ-xem, **trừ Manager vẫn sửa được điểm Final** từng câu.
+  - Khóa được áp 3 lớp: ẩn/disable nút trên UI, chặn ở `js/store.js` (`isReviewPeriodOpen` / `isManagerEditAllowed`), và chặn ở `database.rules.json` (so sánh `now` với mốc thời gian — xem mục Security rules).
 - **Điểm final tự động** = trung bình điểm các reviewer đã nộp cho từng câu; Manager có thể override thủ công (ô xanh) và đặt lại về trung bình. Khi Manager chỉnh sửa, điểm được **ép về số nguyên 1–5**.
 - **Cảnh báo điểm lẻ** — điểm final cuối cùng phải là số nguyên (1–5). Khi điểm trung bình tự tính bị lẻ (vd. 4.5), hệ thống highlight màu cam: banner trên Dashboard (Manager), icon cảnh báo ở danh sách nhân viên, banner và ô Final trong bảng điểm chi tiết. Manager xem lại và làm tròn; Leader cũng thấy cảnh báo (chỉ để nắm thông tin, việc làm tròn do Manager thực hiện).
 - **Import Excel** (SheetJS): kéo-thả, preview, file mẫu tải về.
@@ -63,6 +67,10 @@ Rules đảm bảo (trong phạm vi `tools/performance-review`):
 - Chỉ Manager (email có trong `tools/performance-review/managers`) ghi được `groups` / `employees` / `finals` / `managers` / `leaders`.
 - Reviewer chỉ ghi được đúng bản review của mình, cho nhân viên mình được assign, và **không ghi được nữa sau khi đã nộp** (`status = submitted`).
 - Leader không có quyền ghi gì thêm (chỉ ghi review của mình như Reviewer); phạm vi *xem theo phòng ban* được giới hạn ở tầng UI — rules cho phép mọi user đã đăng nhập đọc dữ liệu (giới hạn đọc theo phòng ban không khả thi với cấu trúc node hiện tại của Realtime DB; chấp nhận được với tool nội bộ).
+- **Khóa theo thời gian** (`now` của RTDB = epoch ms server-side):
+  - `reviews/$empId/$reviewerId`: chỉ ghi được khi `APP_START_DATE_ISO ≤ now ≤ APP_DEADLINE_ISO`.
+  - `finals/$empId`, `groups`, `groupWeights`, `bands`, `employees`: Manager chỉ ghi được khi `now ≥ APP_START_DATE_ISO` (không có chặn trên — Manager vẫn sửa Final sau deadline).
+  - ⚠️ Các mốc thời gian trong rules là **số epoch ms hardcode** (rules JSON không đọc được hằng số JS). Khi đổi `APP_START_DATE_ISO` / `APP_DEADLINE_ISO` trong `js/firebase-config.js`, phải tính lại epoch ms tương ứng và sửa trong `database.rules.json`, ví dụ: `node -e "console.log(new Date('2026-06-01T00:00:00').getTime())"`.
 
 ### 4. Seed dữ liệu
 

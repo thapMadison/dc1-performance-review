@@ -65,6 +65,33 @@ export async function initStore(b) {
   });
 }
 
+/* ═══════════ Review-period gating ═══════════
+   Mirrors js/ui.js reviewPeriodStatus() — kept local (no import from ui.js)
+   to avoid a store↔ui dependency cycle. Used by write helpers below to
+   reject mutations once the app should be read-only. */
+
+import { APP_DEADLINE_ISO, APP_START_DATE_ISO } from './firebase-config.js';
+
+export function reviewPeriodStatus(nowMs = Date.now()) {
+  const start = APP_START_DATE_ISO ? new Date(APP_START_DATE_ISO).getTime() : null;
+  const end = new Date(APP_DEADLINE_ISO).getTime();
+  const beforeStart = start != null && nowMs < start;
+  const expired = nowMs > end;
+  return { beforeStart, expired, locked: beforeStart || expired, active: !beforeStart && !expired };
+}
+
+// Reviewer-facing write gate: blocked before the period starts AND after
+// it ends. (Manager Final-score edits use a separate, looser gate below.)
+export function isReviewPeriodOpen(nowMs = Date.now()) {
+  return reviewPeriodStatus(nowMs).active;
+}
+
+// Manager Final-score edit gate: blocked only before the period starts —
+// managers may still adjust Final scores after the deadline.
+export function isManagerEditAllowed(nowMs = Date.now()) {
+  return !reviewPeriodStatus(nowMs).beforeStart;
+}
+
 /* ═══════════ Computed helpers ═══════════ */
 
 export function allQuestionIds(groups = state.groups) {
@@ -199,6 +226,12 @@ function sanitizeAnswers(answers) {
 }
 
 export function saveReview(empId, reviewerId, { status, answers, overallComment, submittedAt }) {
+  // Block reviewer save/submit when review period not open
+  if (!isReviewPeriodOpen()) {
+    const err = new Error('Kỳ đánh giá đã đóng hoặc chưa bắt đầu');
+    err.code = 'PERIOD_LOCKED';
+    return Promise.reject(err);
+  }
   const oc = overallComment && overallComment.trim() ? overallComment.trim() : null;
   return backend.saveReview(empId, reviewerId, {
     status,
@@ -209,7 +242,15 @@ export function saveReview(empId, reviewerId, { status, answers, overallComment,
   });
 }
 
+// Shared rejection for manager actions blocked before the period starts.
+function periodLockedError() {
+  const err = new Error('Kỳ đánh giá chưa bắt đầu');
+  err.code = 'PERIOD_LOCKED';
+  return Promise.reject(err);
+}
+
 export function assignReviewers(empId, reviewerIds /* array of empIds */) {
+  if (!isManagerEditAllowed()) return periodLockedError();
   const emp = state.employees.find(e => e.id === empId);
   const prev = emp ? reviewerIdsOf(emp) : [];
   const removed = prev.filter(id => !reviewerIds.includes(id));
@@ -219,13 +260,20 @@ export function assignReviewers(empId, reviewerIds /* array of empIds */) {
 }
 
 export function setFinal(empId, qid, score) {
+  if (!isManagerEditAllowed()) return periodLockedError();
   if (score == null) return backend.resetFinal(empId, qid);
   // finals must be whole points 1–5
   const v = Math.max(1, Math.min(5, Math.round(score)));
   return backend.setFinal(empId, qid, v);
 }
-export function resetFinal(empId, qid) { return backend.resetFinal(empId, qid); }
-export function resetAllFinals(empId) { return backend.resetAllFinals(empId); }
+export function resetFinal(empId, qid) {
+  if (!isManagerEditAllowed()) return periodLockedError();
+  return backend.resetFinal(empId, qid);
+}
+export function resetAllFinals(empId) {
+  if (!isManagerEditAllowed()) return periodLockedError();
+  return backend.resetAllFinals(empId);
+}
 
 // Per-group weight (%). Clamped to 0–100; manager-only (Bộ câu hỏi page).
 export function setGroupWeight(groupId, weight) {
@@ -233,5 +281,11 @@ export function setGroupWeight(groupId, weight) {
   return backend.setGroupWeight(groupId, w);
 }
 
-export function importQuestions(groups) { return backend.importQuestions(groups); }
-export function importEmployees(list) { return backend.importEmployees(list); }
+export function importQuestions(groups) {
+  if (!isManagerEditAllowed()) return periodLockedError();
+  return backend.importQuestions(groups);
+}
+export function importEmployees(list) {
+  if (!isManagerEditAllowed()) return periodLockedError();
+  return backend.importEmployees(list);
+}

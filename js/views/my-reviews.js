@@ -2,7 +2,7 @@
    MY REVIEWS — employees assigned to the current reviewer
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, progress, pageHead, emptyState, hiCard, countdownBanner } from '../ui.js';
+import { esc, icon, avatar, statusPill, progress, pageHead, emptyState, hiCard, countdownBanner, reviewPeriodStatus } from '../ui.js';
 import { state, allQuestionIds, reviewOf, answeredCount } from '../store.js';
 import { nav } from '../router.js';
 import { APP_CYCLE } from '../firebase-config.js';
@@ -19,8 +19,18 @@ export function renderMyReviews(container, user) {
     { l: 'Còn lại', v: mine.length - done, c: 'var(--warn)' },
   ];
 
+  const period = reviewPeriodStatus();
+
   container.innerHTML = `
     ${pageHead({ eyebrow: 'Reviewer', title: 'Đánh giá của tôi', desc: `Những nhân viên bạn được phân công đánh giá trong chu kỳ ${APP_CYCLE}.` })}
+
+    ${period.locked ? `
+    <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#EEF1F8;border:1px solid var(--line);margin-bottom:18px">
+      ${icon('lock', { size: 18, color: '#5B6B8A' })}
+      <div style="font-size:13.5px;color:#3D4B66;font-weight:600">
+        ${period.beforeStart ? 'Kỳ đánh giá chưa bắt đầu. Bạn chỉ có thể xem.' : 'Kỳ đánh giá đã kết thúc. Bạn chỉ có thể xem.'}
+      </div>
+    </div>` : ''}
 
     ${countdownBanner()}
 

@@ -5,7 +5,7 @@
    on "Lưu nháp" / "Nộp" (so typing never fights re-renders).
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS } from '../ui.js';
+import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS, reviewPeriodStatus } from '../ui.js';
 import { state, allQuestionIds, reviewOf, saveReview, classify } from '../store.js';
 import { nav } from '../router.js';
 import { requestRender } from '../bus.js';
@@ -74,7 +74,10 @@ export function renderReviewForm(container, user, empId) {
     return;
   }
 
-  const locked = existing && existing.status === 'submitted';
+  const submittedLocked = existing && existing.status === 'submitted';
+  const periodStatus = reviewPeriodStatus();
+  const periodLocked = !periodStatus.active;
+  const locked = submittedLocked || periodLocked;
   const s = getSession(empId, myId);
   const qids = allQuestionIds();
   const ans = qids.filter(q => s.answers[q] && s.answers[q].score != null).length;
@@ -109,7 +112,11 @@ export function renderReviewForm(container, user, empId) {
       ${locked ? `
       <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#EEF1F8;border:1px solid var(--line);border-radius:9px;margin-bottom:24px">
         ${icon('lock', { size: 18, color: '#5B6B8A' })}
-        <div style="font-size:13.5px;color:#3D4B66;font-weight:600">Bản đánh giá đã được nộp và khóa. Bạn không thể chỉnh sửa nữa.</div>
+        <div style="font-size:13.5px;color:#3D4B66;font-weight:600">
+          ${submittedLocked ? 'Bản đánh giá đã được nộp và khóa. Bạn không thể chỉnh sửa nữa.'
+            : periodStatus.beforeStart ? 'Kỳ đánh giá chưa bắt đầu. Bạn chỉ có thể xem.'
+            : 'Kỳ đánh giá đã kết thúc. Bạn chỉ có thể xem.'}
+        </div>
       </div>` : ''}
 
       ${state.groups.map((g, gi) => {

@@ -5,12 +5,13 @@
    Fractional auto-averages are flagged so the Manager rounds them.
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS } from '../ui.js';
+import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS, reviewPeriodStatus } from '../ui.js';
 import {
   state, reviewerIdsOf, avgForQuestion, finalForQuestion,
   isFractional, fractionalQuestionsOf,
   setFinal, resetFinal, resetAllFinals, assignReviewers,
   groupStats, weightedFinal, totalWeight, classify, bands,
+  isManagerEditAllowed,
 } from '../store.js';
 import { inLeaderDept } from '../auth.js';
 import { nav } from '../router.js';
@@ -24,7 +25,13 @@ export function renderEmployeeDetail(container, empId, user) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'help', title: 'Không tìm thấy nhân viên', desc: 'Nhân viên này không còn trong danh sách.' })}</div>`;
     return;
   }
-  const canEdit = user.role === 'manager';
+  const isManager = user.role === 'manager';
+  const period = reviewPeriodStatus();
+  // Final-score editing stays open for managers after the deadline expires —
+  // only the pre-start lock blocks it. Reviewer assignment is a setup action,
+  // gated to the full active window.
+  const canEdit = isManager && !period.beforeStart;
+  const canAssign = isManager && period.active;
   if (user.role === 'leader' && !inLeaderDept(user, emp)) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'lock', title: 'Không có quyền xem', desc: `Nhân viên này không thuộc phòng ban ${user.dept} của bạn.` })}</div>`;
     return;
@@ -45,6 +52,16 @@ export function renderEmployeeDetail(container, empId, user) {
 
   container.innerHTML = `
     <button class="back-btn" data-back>← Danh sách nhân viên</button>
+
+    ${period.beforeStart ? `
+    <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#EEF1F8;border:1px solid var(--line);margin-bottom:18px">
+      ${icon('lock', { size: 18, color: '#5B6B8A' })}
+      <div style="font-size:13.5px;color:#3D4B66;font-weight:600">Kỳ đánh giá chưa bắt đầu. Bạn chỉ có thể xem.</div>
+    </div>` : (period.expired && isManager) ? `
+    <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--warn-bg);border:1px solid #EFD9AE;margin-bottom:18px">
+      ${icon('alert', { size: 18, color: 'var(--warn)' })}
+      <div style="font-size:13.5px;color:#8A5A12;font-weight:600">Kỳ đánh giá đã kết thúc — bạn vẫn có thể chỉnh sửa điểm Final.</div>
+    </div>` : ''}
 
     <div class="card card-hi" style="padding:24px;margin-bottom:22px">
       <div class="hi-tri" style="background:color-mix(in srgb, var(--blue) 11%, transparent)"></div>
@@ -74,7 +91,7 @@ export function renderEmployeeDetail(container, empId, user) {
     <div class="card" style="padding:20px;margin-bottom:22px">
       <div style="display:flex;justify-content:space-between;align-items:center;${assigned.length ? 'margin-bottom:16px' : ''}">
         <div style="font-size:12px;font-weight:700;color:var(--faint);letter-spacing:0.1em;text-transform:uppercase">Reviewer được phân công</div>
-        ${canEdit ? btn({ label: assigned.length ? 'Chỉnh sửa' : 'Phân công', variant: 'ghost', size: 'sm', icon: 'users', attrs: 'data-assign' }) : ''}
+        ${canAssign ? btn({ label: assigned.length ? 'Chỉnh sửa' : 'Phân công', variant: 'ghost', size: 'sm', icon: 'users', attrs: 'data-assign' }) : ''}
       </div>
       ${assigned.length ? `
         <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -91,7 +108,7 @@ export function renderEmployeeDetail(container, empId, user) {
             </div>`;
           }).join('')}
         </div>`
-        : `<div style="font-size:13.5px;color:var(--sub);padding-top:4px">Chưa có reviewer nào.${canEdit ? ' Bấm <b>Phân công</b> để bắt đầu.' : ''}</div>`}
+        : `<div style="font-size:13.5px;color:var(--sub);padding-top:4px">Chưa có reviewer nào.${canAssign ? ' Bấm <b>Phân công</b> để bắt đầu.' : ''}</div>`}
     </div>
 
     ${submitted.length === 0
