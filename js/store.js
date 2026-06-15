@@ -4,6 +4,8 @@
    Views read `state`, call write helpers, and re-render on notify.
 ═══════════════════════════════════════════════════════════════ */
 
+import { STATUS } from './constants.js';
+
 export const state = {
   authReady: false,
   authUser: null,        // { email, name } | null
@@ -111,7 +113,7 @@ export function avgForQuestion(empId, qid) {
   const empReviews = state.reviews[empId] || {};
   const vals = [];
   Object.values(empReviews).forEach(r => {
-    const a = r && r.status === 'submitted' && r.answers && r.answers[qid];
+    const a = r && r.status === STATUS.SUBMITTED && r.answers && r.answers[qid];
     if (a && a.score != null) vals.push(a.score);
   });
   if (!vals.length) return null;
@@ -200,8 +202,8 @@ export function fractionalQuestionsOf(empId) {
 export function empProgress(emp) {
   const assigned = reviewerIdsOf(emp);
   const r = state.reviews[emp.id] || {};
-  const submitted = assigned.filter(id => r[id] && r[id].status === 'submitted').length;
-  const drafts = assigned.filter(id => r[id] && r[id].status === 'draft').length;
+  const submitted = assigned.filter(id => r[id] && r[id].status === STATUS.SUBMITTED).length;
+  const drafts = assigned.filter(id => r[id] && r[id].status === STATUS.DRAFT).length;
   return { assigned: assigned.length, submitted, drafts };
 }
 
@@ -238,7 +240,7 @@ export function saveReview(empId, reviewerId, { status, answers, overallComment,
     answers: sanitizeAnswers(answers),
     overallComment: oc,
     updatedAt: Date.now(),
-    submittedAt: status === 'submitted' ? Date.now() : (submittedAt || null),
+    submittedAt: status === STATUS.SUBMITTED ? Date.now() : (submittedAt || null),
   });
 }
 

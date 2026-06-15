@@ -4,13 +4,16 @@
    Firebase credentials. Seed data mirrors the design prototype.
 ═══════════════════════════════════════════════════════════════ */
 
+import { STATUS, ROLE, COLLECTIONS } from './constants.js';
+import { DEFAULT_BANDS } from './store.js';
+
 const KEY = 'madison_pr_demo_v5';
 const AUTH_KEY = 'madison_pr_demo_auth';
 
 const DEMO_ACCOUNTS = [
-  { name: 'Trần Minh Anh', email: 'minhanh@madison.tech', role: 'manager', title: 'Head of People' },
-  { name: 'Nguyễn Thị Lan', email: 'lan@madison.tech', role: 'leader', title: 'Engineering Lead' },
-  { name: 'Lê Quang Huy', email: 'huy@madison.tech', role: 'reviewer', title: 'Product Lead' },
+  { name: 'Trần Minh Anh', email: 'minhanh@madison.tech', role: ROLE.MANAGER, title: 'Head of People' },
+  { name: 'Nguyễn Thị Lan', email: 'lan@madison.tech', role: ROLE.LEADER, title: 'Engineering Lead' },
+  { name: 'Lê Quang Huy', email: 'huy@madison.tech', role: ROLE.REVIEWER, title: 'Product Lead' },
 ];
 
 function seed() {
@@ -67,13 +70,13 @@ function seed() {
       status, answers,
       overallComment: overallComment || null,
       updatedAt: Date.now() - 86400000,
-      submittedAt: status === 'submitted' ? Date.now() - 86400000 : null,
+      submittedAt: status === STATUS.SUBMITTED ? Date.now() - 86400000 : null,
     };
   }
 
   const reviews = {
     e1: {
-      e_lan: mkReview([5, 4, 5, 4, 5, 4, 5, 4], 'submitted',
+      e_lan: mkReview([5, 4, 5, 4, 5, 4, 5, 4], STATUS.SUBMITTED,
         {
           0: 'Code sạch, ít lỗi, review PR rất kỹ. Bàn giao đúng chuẩn.',
           2: 'Hoàn thành sprint đều đặn, ước lượng thời gian ngày càng chính xác.',
@@ -81,7 +84,7 @@ function seed() {
           6: 'Luôn nhận phần việc khó và theo tới cùng, rất đáng tin cậy.',
         },
         'Một năm rất ấn tượng. Kiệt làm chủ tốt phần frontend, chất lượng bàn giao cao và luôn sẵn sàng hỗ trợ đồng đội. Điểm cần phát triển là chủ động dẫn dắt các quyết định kỹ thuật lớn hơn trong năm tới.'),
-      e_huy: mkReview([4, 4, 4, 5, 4, 5, 4, 4], 'submitted',
+      e_huy: mkReview([4, 4, 4, 5, 4, 5, 4, 4], STATUS.SUBMITTED,
         {
           0: 'Sản phẩm bàn giao ổn định, hiếm khi phải sửa lại sau khi release.',
           3: 'Phối hợp với team product rất ăn ý, chủ động hỏi để hiểu đúng yêu cầu.',
@@ -90,7 +93,7 @@ function seed() {
         'Phối hợp với product rất ăn ý và đáng tin cậy về tiến độ. Nên tự tin trình bày quan điểm sớm hơn trong các buổi thảo luận để tạo ảnh hưởng nhiều hơn.'),
     },
     e2: {
-      e_lan: mkReview([4, 5, 4, 4, 3, 4, 4, 4], 'draft', null),
+      e_lan: mkReview([4, 5, 4, 4, 3, 4, 4, 4], STATUS.DRAFT, null),
     },
   };
 
@@ -100,13 +103,7 @@ function seed() {
     reviews,
     finals: {},
     groupWeights: { g1: 43, g2: 30, g3: 27 },
-    bands: [
-      { id: 'A', label: 'Loại A', min: 4.50, max: 5.00 },
-      { id: 'B', label: 'Loại B', min: 4.00, max: 4.49 },
-      { id: 'C', label: 'Loại C', min: 3.00, max: 3.99 },
-      { id: 'D', label: 'Loại D', min: 2.21, max: 2.99 },
-      { id: 'E', label: 'Loại E', min: 1.00, max: 2.20 },
-    ],
+    bands: DEFAULT_BANDS.map(b => ({ ...b })),
     managers: { 'minhanh@madison,tech': true },
     leaders: { 'lan@madison,tech': 'Engineering' },
   };
@@ -129,7 +126,7 @@ function persist() {
 }
 function emitAll() {
   if (!handlers) return;
-  ['groups', 'employees', 'reviews', 'finals', 'groupWeights', 'bands', 'managers', 'leaders'].forEach(key =>
+  COLLECTIONS.forEach(key =>
     handlers.onData(key, JSON.parse(JSON.stringify(data[key] ?? null))));
 }
 function mutate(fn) { fn(data); persist(); emitAll(); }

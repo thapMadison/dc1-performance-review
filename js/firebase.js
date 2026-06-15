@@ -14,6 +14,7 @@ import {
   initializeAppCheck, ReCaptchaV3Provider,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 import { firebaseConfig, MS_TENANT, RECAPTCHA_SITE_KEY } from './firebase-config.js';
+import { COLLECTIONS } from './constants.js';
 
 let auth = null;
 let db = null;
@@ -25,7 +26,7 @@ const BASE = 'tools/performance-review';
 
 function subscribeData(onData) {
   unsubscribeData();
-  ['groups', 'employees', 'reviews', 'finals', 'groupWeights', 'bands', 'managers', 'leaders'].forEach(key => {
+  COLLECTIONS.forEach(key => {
     unsubs.push(onValue(ref(db, `${BASE}/${key}`), snap => onData(key, snap.val()), err => {
       console.error(`RTDB read failed for /${BASE}/${key}:`, err);
     }));

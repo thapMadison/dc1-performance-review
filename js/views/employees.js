@@ -8,6 +8,7 @@ import { state, empProgress, empAvg, fractionalQuestionsOf } from '../store.js';
 import { inLeaderDept, encodeEmailKey } from '../auth.js';
 import { nav } from '../router.js';
 import { openImportModal } from './import-modal.js';
+import { ROLE } from '../constants.js';
 
 let query = '';            // survives re-renders
 let onlyFractional = false; // "điểm lẻ cần chú ý" filter toggle
@@ -19,7 +20,7 @@ export function clearEmployeesFilters() { query = ''; onlyFractional = false; }
 export function setEmployeesFractionalFilter(on) { onlyFractional = !!on; query = ''; }
 
 export function renderEmployees(container, user) {
-  const isMgr = user.role === 'manager';
+  const isMgr = user.role === ROLE.MANAGER;
   const scoped = isMgr ? state.employees : state.employees.filter(e => inLeaderDept(user, e));
   const fracEmps = scoped.filter(e => fractionalQuestionsOf(e.id).length > 0);
   const fracCount = fracEmps.length;

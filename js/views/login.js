@@ -6,6 +6,7 @@
 import { esc, icon, avatar, LOGO, logoTile, eyebrowMark } from '../ui.js';
 import { getBackend } from '../store.js';
 import { APP_CYCLE, APP_CYCLE_YEAR } from '../firebase-config.js';
+import { ROLE } from '../constants.js';
 
 function msLogo(size = 18) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 21 21">
@@ -89,8 +90,8 @@ export function renderLogin(container) {
               <div style="font-size:14.5px;font-weight:700;color:var(--ink)">${esc(u.name)}</div>
               <div style="font-size:12.5px;color:var(--sub)">${esc(u.email)}</div>
             </div>
-            <span style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:3px 8px;border-radius:5px;background:${u.role === 'manager' ? '#29ABE218' : u.role === 'leader' ? 'var(--ok-bg)' : '#F0F2F5'};color:${u.role === 'manager' ? 'var(--blue)' : u.role === 'leader' ? 'var(--ok)' : 'var(--sub)'}">
-              ${u.role === 'manager' ? 'Manager' : u.role === 'leader' ? 'Leader' : 'Reviewer'}
+            <span style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:3px 8px;border-radius:5px;background:${u.role === ROLE.MANAGER ? '#29ABE218' : u.role === ROLE.LEADER ? 'var(--ok-bg)' : '#F0F2F5'};color:${u.role === ROLE.MANAGER ? 'var(--blue)' : u.role === ROLE.LEADER ? 'var(--ok)' : 'var(--sub)'}">
+              ${u.role === ROLE.MANAGER ? 'Manager' : u.role === ROLE.LEADER ? 'Leader' : 'Reviewer'}
             </span>
             ${icon('chevR', { size: 16, color: 'var(--faint)' })}
           </button>`).join('')}

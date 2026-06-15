@@ -2,7 +2,7 @@
    MANAGER · QUESTIONS — question set grouped view + Excel import
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, pageHead, emptyState, btn, hiCard, NOTCH, GROUP_COLORS } from '../ui.js';
+import { esc, pageHead, emptyState, btn, hiCard, NOTCH, GROUP_COLORS, wireCollapsibles } from '../ui.js';
 import { state, groupWeight, totalWeight, setGroupWeight } from '../store.js';
 import { openImportModal } from './import-modal.js';
 
@@ -93,14 +93,9 @@ export function renderQuestions(container) {
     });
   });
 
-  container.querySelectorAll('[data-toggle]').forEach(btn => {
-    const idx = btn.dataset.toggle;
-    const body = container.querySelector(`[data-body="${idx}"]`);
-    const chevron = container.querySelector(`[data-chevron="${idx}"]`);
-    btn.addEventListener('click', () => {
-      const collapsed = body.classList.toggle('q-group-body--collapsed');
-      chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
-      btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)';
-    });
+  wireCollapsibles(container, {
+    toggleAttr: 'data-toggle', bodyAttr: 'data-body', chevronAttr: 'data-chevron',
+    collapsedClass: 'q-group-body--collapsed',
+    onToggle: (btn, collapsed) => { btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)'; },
   });
 }

@@ -9,6 +9,15 @@ export const LOGO = 'assets/logo-gorilla.png';
 
 export const GROUP_COLORS = ['#E8743B', '#3B7BE8', '#1E9E6A', '#7C5CFC', '#D14D8B', '#29ABE2'];
 
+/* ---------- Classification band palette ----------
+   Color/background per band id (A–E). Single source of truth shared by
+   the employee-detail score table/result modal and the review-form rail.
+   Note: bands C and D have no CSS-var equivalent, so they stay literal. */
+const BAND_COLORS = { A: 'var(--ok)', B: 'var(--blue)', C: '#E8A020', D: '#E06030', E: 'var(--danger)' };
+const BAND_BGS    = { A: '#E6F6EF', B: '#E8F6FC', C: '#FDF3E0', D: '#FDEEE8', E: '#FBEAEA' };
+export function bandColor(id) { return BAND_COLORS[id] || 'var(--sub)'; }
+export function bandBg(id) { return BAND_BGS[id] || '#FAFBFC'; }
+
 /* ---------- escaping ---------- */
 export function esc(s) {
   return String(s == null ? '' : s)
@@ -208,6 +217,27 @@ export function openModal({ title = '', subtitle = '', width = 560, contentHtml 
   document.body.appendChild(overlay);
 
   return { root: overlay, body: overlay.querySelector('[data-modal-body]'), close };
+}
+
+/* ---------- Collapsible groups (imperative wiring) ----------
+   Shared by the question-set, review-form and score-table group cards.
+   Each toggle button carries `toggleAttr` whose value keys its matching
+   body (`bodyAttr`) and chevron (`chevronAttr`). Clicking toggles
+   `collapsedClass` on the body, rotates the chevron, and runs the
+   optional `onToggle(button, collapsed)` for per-site extras (e.g. the
+   header bottom-border). CSS class names stay per-site (different
+   transitions), so the collapsed class is a parameter. */
+export function wireCollapsibles(container, { toggleAttr, bodyAttr, chevronAttr, collapsedClass, onToggle } = {}) {
+  container.querySelectorAll(`[${toggleAttr}]`).forEach(btn => {
+    const key = btn.getAttribute(toggleAttr);
+    const body = container.querySelector(`[${bodyAttr}="${CSS.escape(key)}"]`);
+    const chevron = container.querySelector(`[${chevronAttr}="${CSS.escape(key)}"]`);
+    btn.addEventListener('click', () => {
+      const collapsed = body.classList.toggle(collapsedClass);
+      if (chevron) chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
+      if (onToggle) onToggle(btn, collapsed);
+    });
+  });
 }
 
 /* ---------- Review-period countdown ----------

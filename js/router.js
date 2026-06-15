@@ -4,6 +4,8 @@
    #/myreviews #/review/:empId
 ═══════════════════════════════════════════════════════════════ */
 
+import { ROLE } from './constants.js';
+
 const MANAGER_PAGES = ['dashboard', 'employees', 'employee', 'questions', 'myreviews', 'review'];
 const LEADER_PAGES = ['employees', 'employee', 'myreviews', 'review'];
 const REVIEWER_PAGES = ['myreviews', 'review'];
@@ -21,11 +23,11 @@ export function nav(path) {
 // unauthorized routes fall back to the role's home page.
 export function resolveRoute(user) {
   const { page, param } = parseRoute();
-  const allowed = user.role === 'manager' ? MANAGER_PAGES
-    : user.role === 'leader' ? LEADER_PAGES
+  const allowed = user.role === ROLE.MANAGER ? MANAGER_PAGES
+    : user.role === ROLE.LEADER ? LEADER_PAGES
     : REVIEWER_PAGES;
-  const home = user.role === 'manager' ? 'dashboard'
-    : user.role === 'leader' ? 'employees'
+  const home = user.role === ROLE.MANAGER ? 'dashboard'
+    : user.role === ROLE.LEADER ? 'employees'
     : 'myreviews';
   if (!page || !allowed.includes(page)) return { page: home, param: null };
   return { page, param };

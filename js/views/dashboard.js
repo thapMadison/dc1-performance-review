@@ -7,6 +7,7 @@ import { state, empProgress, fractionalQuestionsOf } from '../store.js';
 import { nav } from '../router.js';
 import { setEmployeesFractionalFilter } from './employees.js';
 import { APP_CYCLE } from '../firebase-config.js';
+import { STATUS } from '../constants.js';
 
 export function renderDashboard(container) {
   const { employees } = state;
@@ -35,7 +36,7 @@ export function renderDashboard(container) {
         tone: s.c, pad: 20, style: 'flex:1',
         body: `
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
-            <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;max-width:90px;line-height:1.3">${esc(s.l)}</div>
+            <div class="u-label" style="max-width:90px;line-height:1.3">${esc(s.l)}</div>
             <div style="width:32px;height:32px;border-radius:8px;background:#fff;box-shadow:0 1px 5px color-mix(in srgb, ${s.c} 22%, transparent);display:flex;align-items:center;justify-content:center">
               ${icon(s.icon, { size: 16, color: s.c })}
             </div>
@@ -86,7 +87,7 @@ export function renderDashboard(container) {
               <div style="font-size:14.5px;font-weight:700;color:var(--ink)">${esc(e.name)}</div>
               <div style="font-size:12.5px;color:var(--sub)">${esc(e.title)}${e.dept ? ' · ' + esc(e.dept) : ''}</div>
             </div>
-            ${p.assigned === 0 ? statusPill('pending') : `<span style="font-size:13px;font-weight:600;color:var(--sub)">${p.submitted}/${p.assigned} reviewer đã nộp</span>`}
+            ${p.assigned === 0 ? statusPill(STATUS.PENDING) : `<span style="font-size:13px;font-weight:600;color:var(--sub)">${p.submitted}/${p.assigned} reviewer đã nộp</span>`}
             ${icon('chevR', { size: 16, color: 'var(--faint)' })}
           </div>
         </div>`;

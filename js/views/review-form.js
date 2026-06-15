@@ -5,13 +5,11 @@
    on "Lưu nháp" / "Nộp" (so typing never fights re-renders).
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS, reviewPeriodStatus } from '../ui.js';
+import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS, reviewPeriodStatus, bandColor, wireCollapsibles } from '../ui.js';
 import { state, allQuestionIds, reviewOf, saveReview, classify } from '../store.js';
 import { nav } from '../router.js';
 import { requestRender } from '../bus.js';
-
-// Band palette (mirrors employee-detail) — used for the per-group A–E chip.
-const BAND_COLORS = { A: 'var(--ok)', B: 'var(--blue)', C: '#E8A020', D: '#E06030', E: 'var(--danger)' };
+import { STATUS } from '../constants.js';
 
 // Per-group progress + live average (computed from the working session copy).
 // Unscored questions are excluded from the average so the rail reflects only
@@ -29,12 +27,82 @@ function groupRailStats(g, s) {
 // "TB X.X" chip colored by band classification.
 function avgChip(st, { big = false } = {}) {
   if (st.avgStr == null) return '';
-  const c = st.band ? BAND_COLORS[st.band.id] : 'var(--sub)';
+  const c = st.band ? bandColor(st.band.id) : 'var(--sub)';
   const fs = big ? '12px' : '11px';
   return `
     <span style="display:inline-flex;align-items:center;background:color-mix(in srgb,${c} 12%,transparent);padding:2px 7px;border-radius:999px;white-space:nowrap">
       <span style="font-size:${fs};font-weight:700;color:${c}">TB ${st.avgStr}</span>
     </span>`;
+}
+
+// One question group card: collapsible header + a 1–5 rating row and an
+// optional comment box per question. Output matches the original inline map.
+function questionGroupHtml(g, gi, s, locked) {
+  const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+  return `
+      <div id="grp-${esc(g.id)}" class="card group-anchor" style="margin-bottom:26px;padding:0;overflow:hidden;border-left:3px solid ${color}">
+        <button class="rf-group-toggle" data-rf-toggle="${esc(g.id)}" style="display:flex;align-items:center;gap:11px;padding:14px 20px;width:100%;border:none;border-bottom:1px solid var(--line);background:#FAFBFC;cursor:pointer;text-align:left;transition:background .14s">
+          <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${gi + 1}</div>
+          <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">${esc(g.name)}</h2>
+          <span style="font-size:12px;font-weight:600;color:var(--faint);margin-right:8px">${g.items.length} câu</span>
+          <svg class="rf-chevron" data-rf-chevron="${esc(g.id)}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="rf-group-body" data-rf-body="${esc(g.id)}" style="display:flex;flex-direction:column;gap:0">
+          ${g.items.map((q, qi) => {
+            const a = s.answers[q.id] || { score: null, comment: '' };
+            const showC = s.openComments[q.id] || a.comment;
+            return `
+            <div style="padding:20px;${qi < g.items.length - 1 ? 'border-bottom:1px solid var(--line);' : ''}${a.score != null ? 'background:#FAFEFF;' : ''}">
+              <div style="display:flex;gap:14px">
+                <div style="font-size:13px;font-weight:700;color:${color};margin-top:1px;min-width:22px">${gi + 1}.${qi + 1}</div>
+                <div style="flex:1">
+                  <div style="font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:4px;letter-spacing:-0.01em">${esc(q.text)}</div>
+                  ${q.hint ? `<div style="font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:16px">${esc(q.hint)}</div>` : ''}
+                  ${ratingScale(q.id, a.score, locked)}
+                  ${showC
+                    ? `<div style="margin-top:14px"><textarea class="textarea" data-comment="${esc(q.id)}" ${locked ? 'disabled' : ''} placeholder="Thêm nhận xét cụ thể (không bắt buộc)…">${esc(a.comment)}</textarea></div>`
+                    : (!locked ? `<button class="comment-toggle" data-add-comment="${esc(q.id)}">${icon('plus', { size: 14, color: 'var(--blue)' })} Thêm nhận xét</button>` : '')}
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+}
+
+// Required "overall comment" card shown below the question groups.
+function overallSectionHtml(s, hasOverall, locked) {
+  return `
+      <div id="grp-overall" class="card group-anchor" style="margin-bottom:26px;padding:0;overflow:hidden;border-left:3px solid var(--blue)">
+        <div style="display:flex;align-items:center;gap:11px;padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC">
+          <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon('edit', { size: 13, color: '#fff' })}</div>
+          <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">Nhận xét tổng quan <span style="color:var(--danger)">*</span></h2>
+          <span style="font-size:12px;font-weight:700;color:${hasOverall || locked ? 'var(--ok)' : 'var(--danger)'};display:inline-flex;align-items:center;gap:4px">${hasOverall || locked ? icon('check', { size: 13, color: 'var(--ok)', stroke: 3 }) : ''}Bắt buộc</span>
+        </div>
+        <div style="padding:20px">
+          <div style="font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:14px">Nhận xét chung về nhân viên: điểm mạnh, điểm cần cải thiện, hoặc bất kỳ ý kiến tổng thể nào ngoài từng câu hỏi. Cần nhập trước khi nộp (có thể lưu nháp mà chưa nhập).</div>
+          <textarea class="textarea" data-overall ${locked ? 'disabled' : ''} style="min-height:120px" placeholder="Viết nhận xét tổng quan của bạn…">${esc(s.overallComment)}</textarea>
+        </div>
+      </div>`;
+}
+
+// Rail "live average + band" pill — only shown once the reviewer has scored
+// at least one question. Average excludes unscored questions.
+function overallBandRowHtml(qids, s) {
+  const allScores = qids.map(q => s.answers[q] && s.answers[q].score).filter(v => v != null);
+  if (!allScores.length) return '';
+  const overall = allScores.reduce((a, b) => a + b, 0) / allScores.length;
+  const overallRounded = Math.round(overall * 100) / 100;
+  const overallBand = classify(overallRounded);
+  const bc = overallBand ? bandColor(overallBand.id) : 'var(--sub)';
+  return `
+          <div style="display:flex;align-items:center;gap:10px;margin-top:16px;padding:11px 13px;background:color-mix(in srgb, ${bc} 8%, transparent);border:1.5px solid color-mix(in srgb, ${bc} 30%, transparent);border-radius:9px">
+            ${overallBand ? `<span style="display:inline-flex;align-items:center;gap:6px;background:${bc};padding:4px 9px;border-radius:999px;flex-shrink:0">
+              <span style="width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(overallBand.id)}</span>
+              <span style="font-size:11.5px;font-weight:700;color:#fff">${esc(overallBand.label)}</span>
+            </span>` : ''}
+            <span style="margin-left:auto;font-size:22px;font-weight:700;color:${bc};letter-spacing:-0.02em">${overallRounded.toFixed(2)}<span style="font-size:12px;color:var(--faint);font-weight:600">/5</span></span>
+          </div>`;
 }
 
 // One in-progress form session at a time (reset when empId/reviewer changes)
@@ -74,7 +142,7 @@ export function renderReviewForm(container, user, empId) {
     return;
   }
 
-  const submittedLocked = existing && existing.status === 'submitted';
+  const submittedLocked = existing && existing.status === STATUS.SUBMITTED;
   const periodStatus = reviewPeriodStatus();
   const periodLocked = !periodStatus.active;
   const locked = submittedLocked || periodLocked;
@@ -106,7 +174,7 @@ export function renderReviewForm(container, user, empId) {
           <h1 style="font-size:27px;font-weight:700;color:var(--ink);letter-spacing:-0.03em;line-height:1.05">${esc(emp.name)}</h1>
           <div style="font-size:14px;color:var(--sub);margin-top:3px">${esc(emp.title)}${emp.dept ? ' · ' + esc(emp.dept) : ''} · ${esc(emp.email)}</div>
         </div>
-        ${statusPill(locked ? 'locked' : (existing ? existing.status : 'pending'))}
+        ${statusPill(locked ? STATUS.LOCKED : (existing ? existing.status : STATUS.PENDING))}
       </div>
 
       ${locked ? `
@@ -119,50 +187,9 @@ export function renderReviewForm(container, user, empId) {
         </div>
       </div>` : ''}
 
-      ${state.groups.map((g, gi) => {
-        const color = GROUP_COLORS[gi % GROUP_COLORS.length];
-        return `
-      <div id="grp-${esc(g.id)}" class="card group-anchor" style="margin-bottom:26px;padding:0;overflow:hidden;border-left:3px solid ${color}">
-        <button class="rf-group-toggle" data-rf-toggle="${esc(g.id)}" style="display:flex;align-items:center;gap:11px;padding:14px 20px;width:100%;border:none;border-bottom:1px solid var(--line);background:#FAFBFC;cursor:pointer;text-align:left;transition:background .14s">
-          <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${gi + 1}</div>
-          <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">${esc(g.name)}</h2>
-          <span style="font-size:12px;font-weight:600;color:var(--faint);margin-right:8px">${g.items.length} câu</span>
-          <svg class="rf-chevron" data-rf-chevron="${esc(g.id)}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="rf-group-body" data-rf-body="${esc(g.id)}" style="display:flex;flex-direction:column;gap:0">
-          ${g.items.map((q, qi) => {
-            const a = s.answers[q.id] || { score: null, comment: '' };
-            const showC = s.openComments[q.id] || a.comment;
-            return `
-            <div style="padding:20px;${qi < g.items.length - 1 ? 'border-bottom:1px solid var(--line);' : ''}${a.score != null ? 'background:#FAFEFF;' : ''}">
-              <div style="display:flex;gap:14px">
-                <div style="font-size:13px;font-weight:700;color:${color};margin-top:1px;min-width:22px">${gi + 1}.${qi + 1}</div>
-                <div style="flex:1">
-                  <div style="font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:4px;letter-spacing:-0.01em">${esc(q.text)}</div>
-                  ${q.hint ? `<div style="font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:16px">${esc(q.hint)}</div>` : ''}
-                  ${ratingScale(q.id, a.score, locked)}
-                  ${showC
-                    ? `<div style="margin-top:14px"><textarea class="textarea" data-comment="${esc(q.id)}" ${locked ? 'disabled' : ''} placeholder="Thêm nhận xét cụ thể (không bắt buộc)…">${esc(a.comment)}</textarea></div>`
-                    : (!locked ? `<button class="comment-toggle" data-add-comment="${esc(q.id)}">${icon('plus', { size: 14, color: 'var(--blue)' })} Thêm nhận xét</button>` : '')}
-                </div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>`;
-      }).join('')}
+      ${state.groups.map((g, gi) => questionGroupHtml(g, gi, s, locked)).join('')}
 
-      <div id="grp-overall" class="card group-anchor" style="margin-bottom:26px;padding:0;overflow:hidden;border-left:3px solid var(--blue)">
-        <div style="display:flex;align-items:center;gap:11px;padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC">
-          <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon('edit', { size: 13, color: '#fff' })}</div>
-          <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">Nhận xét tổng quan <span style="color:var(--danger)">*</span></h2>
-          <span style="font-size:12px;font-weight:700;color:${hasOverall || locked ? 'var(--ok)' : 'var(--danger)'};display:inline-flex;align-items:center;gap:4px">${hasOverall || locked ? icon('check', { size: 13, color: 'var(--ok)', stroke: 3 }) : ''}Bắt buộc</span>
-        </div>
-        <div style="padding:20px">
-          <div style="font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:14px">Nhận xét chung về nhân viên: điểm mạnh, điểm cần cải thiện, hoặc bất kỳ ý kiến tổng thể nào ngoài từng câu hỏi. Cần nhập trước khi nộp (có thể lưu nháp mà chưa nhập).</div>
-          <textarea class="textarea" data-overall ${locked ? 'disabled' : ''} style="min-height:120px" placeholder="Viết nhận xét tổng quan của bạn…">${esc(s.overallComment)}</textarea>
-        </div>
-      </div>
+      ${overallSectionHtml(s, hasOverall, locked)}
     </div>
 
     <div class="review-rail" style="width:264px;flex-shrink:0;position:sticky;top:0;padding-top:52px">
@@ -177,22 +204,7 @@ export function renderReviewForm(container, user, empId) {
         </div>
         ${progress(ans, qids.length, complete ? 'var(--ok)' : 'var(--blue)', 8)}
 
-        ${(() => {
-          const allScores = qids.map(q => s.answers[q] && s.answers[q].score).filter(v => v != null);
-          if (!allScores.length) return '';
-          const overall = allScores.reduce((a, b) => a + b, 0) / allScores.length;
-          const overallRounded = Math.round(overall * 100) / 100;
-          const overallBand = classify(overallRounded);
-          const bc = overallBand ? BAND_COLORS[overallBand.id] : 'var(--sub)';
-          return `
-          <div style="display:flex;align-items:center;gap:10px;margin-top:16px;padding:11px 13px;background:color-mix(in srgb, ${bc} 8%, transparent);border:1.5px solid color-mix(in srgb, ${bc} 30%, transparent);border-radius:9px">
-            ${overallBand ? `<span style="display:inline-flex;align-items:center;gap:6px;background:${bc};padding:4px 9px;border-radius:999px;flex-shrink:0">
-              <span style="width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(overallBand.id)}</span>
-              <span style="font-size:11.5px;font-weight:700;color:#fff">${esc(overallBand.label)}</span>
-            </span>` : ''}
-            <span style="margin-left:auto;font-size:22px;font-weight:700;color:${bc};letter-spacing:-0.02em">${overallRounded.toFixed(2)}<span style="font-size:12px;color:var(--faint);font-weight:600">/5</span></span>
-          </div>`;
-        })()}
+        ${overallBandRowHtml(qids, s)}
 
         <div style="display:flex;flex-direction:column;gap:4px;margin:18px 0 4px">
           ${state.groups.map((g, gi) => {
@@ -256,14 +268,9 @@ function wire(container, emp, user, locked, s, qids) {
   container.querySelector('[data-back]').addEventListener('click', () => nav('/myreviews'));
 
   // group collapse / expand
-  container.querySelectorAll('[data-rf-toggle]').forEach(btn => {
-    const gid = btn.dataset.rfToggle;
-    const body = container.querySelector(`[data-rf-body="${CSS.escape(gid)}"]`);
-    const chevron = container.querySelector(`[data-rf-chevron="${CSS.escape(gid)}"]`);
-    btn.addEventListener('click', () => {
-      const collapsed = body.classList.toggle('rf-group-body--collapsed');
-      chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
-    });
+  wireCollapsibles(container, {
+    toggleAttr: 'data-rf-toggle', bodyAttr: 'data-rf-body', chevronAttr: 'data-rf-chevron',
+    collapsedClass: 'rf-group-body--collapsed',
   });
 
   // jump to a group anchor — auto-expand the group if it is collapsed
@@ -354,7 +361,7 @@ function wire(container, emp, user, locked, s, qids) {
   // ---- shared actions (bound to both desktop rail + mobile bottom bar) ----
   const doSave = async () => {
     await saveReview(s.empId, s.reviewerId, {
-      status: 'draft',
+      status: STATUS.DRAFT,
       answers: s.answers,
       overallComment: s.overallComment,
       submittedAt: null,
@@ -393,7 +400,7 @@ function wire(container, emp, user, locked, s, qids) {
     });
     m.body.querySelector('[data-cancel]').addEventListener('click', m.close);
     m.body.querySelector('[data-confirm]').addEventListener('click', async () => {
-      await saveReview(s.empId, s.reviewerId, { status: 'submitted', answers: s.answers, overallComment: s.overallComment });
+      await saveReview(s.empId, s.reviewerId, { status: STATUS.SUBMITTED, answers: s.answers, overallComment: s.overallComment });
       m.close();
       clearReviewSession();
       nav('/myreviews');

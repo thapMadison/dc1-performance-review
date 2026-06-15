@@ -8,6 +8,8 @@
    Precedence: manager > leader > reviewer.
 ═══════════════════════════════════════════════════════════════ */
 
+import { ROLE } from './constants.js';
+
 // RTDB keys cannot contain '.', so emails are stored with '.' → ','
 export function encodeEmailKey(email) {
   return String(email || '').trim().toLowerCase().replace(/\./g, ',');
@@ -25,7 +27,7 @@ export function resolveUser(state) {
   return {
     email,
     name: au.name || (myEmp && myEmp.name) || email,
-    role: isManager ? 'manager' : (leaderDept ? 'leader' : 'reviewer'),
+    role: isManager ? ROLE.MANAGER : (leaderDept ? ROLE.LEADER : ROLE.REVIEWER),
     dept: leaderDept,
     empId: myEmp ? myEmp.id : null,
     title: myEmp ? myEmp.title : '',

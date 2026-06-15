@@ -144,7 +144,7 @@ export function openImportModal(kind) {
       </div>
 
       <div style="margin-top:20px;padding:14px 16px;background:var(--bg);border-radius:9px;border:1px solid var(--line)">
-        <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">Định dạng cột mong đợi</div>
+        <div class="u-label" style="margin-bottom:8px">Định dạng cột mong đợi</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap">
           ${cols.map(c => `<span style="font-size:12px;font-weight:600;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:5px;padding:4px 9px">${esc(c)}</span>`).join('')}
         </div>

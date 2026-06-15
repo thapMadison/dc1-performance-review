@@ -6,12 +6,13 @@ import { esc, icon, avatar, statusPill, progress, pageHead, emptyState, hiCard, 
 import { state, allQuestionIds, reviewOf, answeredCount } from '../store.js';
 import { nav } from '../router.js';
 import { APP_CYCLE } from '../firebase-config.js';
+import { STATUS } from '../constants.js';
 
 export function renderMyReviews(container, user) {
   const qids = allQuestionIds();
   const myId = user.empId;
   const mine = myId ? state.employees.filter(e => (e.reviewerIds || {})[myId]) : [];
-  const done = mine.filter(e => { const r = reviewOf(e.id, myId); return r && r.status === 'submitted'; }).length;
+  const done = mine.filter(e => { const r = reviewOf(e.id, myId); return r && r.status === STATUS.SUBMITTED; }).length;
 
   const cards = [
     { l: 'Được phân công', v: mine.length, c: 'var(--blue)' },
@@ -48,9 +49,9 @@ export function renderMyReviews(container, user) {
       : `<div style="display:flex;flex-direction:column;gap:12px">
           ${mine.map(e => {
             const r = reviewOf(e.id, myId);
-            const status = r ? r.status : 'pending';
+            const status = r ? r.status : STATUS.PENDING;
             const ans = answeredCount(r, qids);
-            const locked = status === 'submitted';
+            const locked = status === STATUS.SUBMITTED;
             const pct = qids.length ? Math.round(ans / qids.length * 100) : 0;
             return `
             <div class="card card-hover" style="padding:0;overflow:hidden" data-review="${esc(e.id)}">
@@ -68,7 +69,7 @@ export function renderMyReviews(container, user) {
                   ${progress(ans, qids.length, locked ? 'var(--ok)' : 'var(--blue)')}
                 </div>
                 <div class="myreview-status" style="width:130px;display:flex;justify-content:flex-end">
-                  ${statusPill(locked ? 'locked' : status)}
+                  ${statusPill(locked ? STATUS.LOCKED : status)}
                 </div>
                 ${icon(locked ? 'lock' : 'chevR', { size: 18, color: 'var(--faint)' })}
               </div>

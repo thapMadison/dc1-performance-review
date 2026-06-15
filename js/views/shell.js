@@ -6,16 +6,17 @@ import { esc, icon, avatar, logoTile, NOTCH } from '../ui.js';
 import { getBackend } from '../store.js';
 import { nav } from '../router.js';
 import { APP_CYCLE } from '../firebase-config.js';
+import { ROLE } from '../constants.js';
 
 export function sidebarHtml(user, route) {
-  const items = user.role === 'manager'
+  const items = user.role === ROLE.MANAGER
     ? [
         { id: 'dashboard', label: 'Tổng quan', icon: 'grid' },
         { id: 'employees', label: 'Nhân viên', icon: 'users' },
         { id: 'questions', label: 'Bộ câu hỏi', icon: 'help' },
         { id: 'myreviews', label: 'Đánh giá của tôi', icon: 'clipboard' },
       ]
-    : user.role === 'leader'
+    : user.role === ROLE.LEADER
     ? [
         { id: 'employees', label: 'Phòng ban của tôi', icon: 'users' },
         { id: 'myreviews', label: 'Đánh giá của tôi', icon: 'clipboard' },
@@ -64,8 +65,8 @@ export function sidebarHtml(user, route) {
         <div style="flex:1;min-width:0">
           <div style="font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(user.name)}</div>
           <div style="font-size:11px;color:#6B7B92;display:flex;align-items:center;gap:5px">
-            <span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${user.role === 'manager' ? '#29ABE225' : user.role === 'leader' ? '#1E9E6A2E' : 'rgba(255,255,255,0.08)'};color:${user.role === 'manager' ? 'var(--blue)' : user.role === 'leader' ? '#43CE94' : '#9AA8BD'};font-weight:700;font-size:10px;letter-spacing:0.04em;text-transform:uppercase">
-              ${user.role === 'manager' ? 'Manager' : user.role === 'leader' ? 'Leader' : 'Reviewer'}
+            <span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${user.role === ROLE.MANAGER ? '#29ABE225' : user.role === ROLE.LEADER ? '#1E9E6A2E' : 'rgba(255,255,255,0.08)'};color:${user.role === ROLE.MANAGER ? 'var(--blue)' : user.role === ROLE.LEADER ? '#43CE94' : '#9AA8BD'};font-weight:700;font-size:10px;letter-spacing:0.04em;text-transform:uppercase">
+              ${user.role === ROLE.MANAGER ? 'Manager' : user.role === ROLE.LEADER ? 'Leader' : 'Reviewer'}
             </span>
           </div>
         </div>

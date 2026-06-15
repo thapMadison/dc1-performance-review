@@ -5,7 +5,7 @@
    Fractional auto-averages are flagged so the Manager rounds them.
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS, reviewPeriodStatus } from '../ui.js';
+import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS, reviewPeriodStatus, bandColor, bandBg, wireCollapsibles } from '../ui.js';
 import {
   state, reviewerIdsOf, avgForQuestion, finalForQuestion,
   isFractional, fractionalQuestionsOf,
@@ -15,9 +15,7 @@ import {
 } from '../store.js';
 import { inLeaderDept } from '../auth.js';
 import { nav } from '../router.js';
-
-const BAND_COLORS = { A: 'var(--ok)', B: 'var(--blue)', C: '#E8A020', D: '#E06030', E: 'var(--danger)' };
-const BAND_BGS    = { A: '#E6F6EF', B: '#E8F6FC', C: '#FDF3E0', D: '#FDEEE8', E: '#FBEAEA' };
+import { STATUS, ROLE } from '../constants.js';
 
 export function renderEmployeeDetail(container, empId, user) {
   const emp = state.employees.find(e => e.id === empId);
@@ -25,25 +23,24 @@ export function renderEmployeeDetail(container, empId, user) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'help', title: 'Không tìm thấy nhân viên', desc: 'Nhân viên này không còn trong danh sách.' })}</div>`;
     return;
   }
-  const isManager = user.role === 'manager';
+  const isManager = user.role === ROLE.MANAGER;
   const period = reviewPeriodStatus();
   // Final-score editing stays open for managers after the deadline expires —
   // only the pre-start lock blocks it. Reviewer assignment is a setup action,
   // gated to the full active window.
   const canEdit = isManager && !period.beforeStart;
   const canAssign = isManager && period.active;
-  if (user.role === 'leader' && !inLeaderDept(user, emp)) {
+  if (user.role === ROLE.LEADER && !inLeaderDept(user, emp)) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'lock', title: 'Không có quyền xem', desc: `Nhân viên này không thuộc phòng ban ${user.dept} của bạn.` })}</div>`;
     return;
   }
 
   const empReviews = state.reviews[empId] || {};
   const assigned = reviewerIdsOf(emp).map(id => state.employees.find(e => e.id === id)).filter(Boolean);
-  const submitted = assigned.filter(u => empReviews[u.id] && empReviews[u.id].status === 'submitted');
+  const submitted = assigned.filter(u => empReviews[u.id] && empReviews[u.id].status === STATUS.SUBMITTED);
   const overrides = state.finals[empId] || {};
   const final = weightedFinal(empId);
   const band = classify(final);
-  const bandColor = id => BAND_COLORS[id] || 'var(--sub)';
   const allSubmitted = assigned.length > 0 && submitted.length === assigned.length;
   const anyEdited = Object.values(overrides).some(x => x && x.edited);
   const fractional = fractionalQuestionsOf(empId);
@@ -76,11 +73,11 @@ export function renderEmployeeDetail(container, empId, user) {
         </div>
         <div class="detail-stats" style="display:contents">
         <div class="detail-stat" style="text-align:center;padding:0 24px;border-right:1px solid var(--line)">
-          <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">Điểm Final${band ? ` · <span style="color:${bandColor(band.id)}">${esc(band.label)}</span>` : ''}</div>
+          <div class="u-label" style="margin-bottom:6px">Điểm Final${band ? ` · <span style="color:${bandColor(band.id)}">${esc(band.label)}</span>` : ''}</div>
           ${scoreChip(final, { size: 'lg', muted: !allSubmitted })}
         </div>
         <div class="detail-stat" style="text-align:center;padding:0 8px 0 24px">
-          <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">Reviewer</div>
+          <div class="u-label" style="margin-bottom:6px">Reviewer</div>
           <div style="font-size:22px;font-weight:700;color:var(--ink)">${submitted.length}<span style="color:var(--faint);font-size:15px">/${assigned.length || '0'}</span></div>
         </div>
         </div>
@@ -97,7 +94,7 @@ export function renderEmployeeDetail(container, empId, user) {
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           ${assigned.map(u => {
             const r = empReviews[u.id];
-            const st = r ? r.status : 'pending';
+            const st = r ? r.status : STATUS.PENDING;
             return `
             <div style="display:flex;align-items:center;gap:10px;padding:8px 12px 8px 8px;border:1px solid var(--line);border-radius:8px;background:#FAFBFC">
               ${avatar(u.name, 30)}
@@ -135,10 +132,51 @@ export function renderEmployeeDetail(container, empId, user) {
         </div>
       </div>` : ''}
 
+      ${scoreTableHtml(empId, submitted, empReviews, canEdit, GRID)}
+
+      ${canEdit && anyEdited ? `
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;color:var(--sub)">
+        <span style="width:12px;height:12px;border-radius:3px;background:var(--blue-hi);border:1.5px solid var(--blue);display:inline-block"></span>
+        Ô tô màu xanh = điểm final đã được Manager chỉnh sửa thủ công.
+        <button class="text-underline-btn" data-reset-all style="color:var(--blue);font-weight:700;margin-left:4px">Đặt lại tất cả về trung bình</button>
+      </div>` : ''}
+
+      <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin:32px 0 14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Nhận xét tổng quan từ reviewer</h2>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${commentsHtml(submitted, empReviews)}
+      </div>`}
+  `;
+
+  wire(container, emp, user);
+}
+
+/* ---------- Weighted result helpers ---------- */
+
+// 2-decimal display formatter (computation always uses raw values upstream)
+const fmt2 = v => v == null ? '—' : (Math.round(v * 100) / 100).toFixed(2);
+
+// The Final column cell: read-only number (+ warn icon) for leaders, or an
+// editable button (inline number input is wired in wire()) for managers.
+function finalCellHtml(fin, canEdit, qid) {
+  const warn = isFractional(fin.score);
+  if (!canEdit) {
+    return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:14.5px;font-weight:700;color:${warn ? 'var(--warn)' : (fin.score != null ? 'var(--ink)' : 'var(--faint)')}"${warn ? ' title="Điểm trung bình lẻ — Manager cần làm tròn về số nguyên"' : ''}>${fin.score != null ? fin.score : '—'}${warn ? icon('alert', { size: 11, color: 'var(--warn)', stroke: 2.4 }) : ''}</span>`;
+  }
+  return `<button class="final-cell-btn${fin.edited ? ' edited' : ''}${warn ? ' warn' : ''}" data-final="${esc(qid)}"
+                      ${warn ? 'title="Điểm trung bình lẻ — cần làm tròn về số nguyên"' : ''}>
+                      <span style="font-size:14.5px;font-weight:700;color:${warn ? 'var(--warn)' : (fin.score != null ? 'var(--ink)' : 'var(--faint)')}">${fin.score != null ? fin.score : '—'}</span>
+                      ${warn ? icon('alert', { size: 11, color: 'var(--warn)', stroke: 2.4 }) : icon('edit', { size: 11, color: fin.edited ? 'var(--blue)' : 'var(--faint)' })}
+                    </button>`;
+}
+
+// Reviewer-by-question score matrix: header avatars row + a collapsible
+// group card per question group (auto-average + final cell + inline comments).
+function scoreTableHtml(empId, submitted, empReviews, canEdit, GRID) {
+  return `
       <div class="score-table" style="display:flex;flex-direction:column;gap:10px">
         <div class="card" style="padding:0;overflow:hidden">
           <div class="sr-row" style="${GRID};padding:12px 22px;background:#FAFBFC;align-items:center">
-            <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">Câu hỏi</div>
+            <div class="u-label">Câu hỏi</div>
             ${submitted.map(u => `<div title="${esc(u.name)}" style="display:flex;justify-content:center">${avatar(u.name, 28)}</div>`).join('')}
             <div style="font-size:10px;font-weight:700;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;text-align:center">TB</div>
             <div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:0.06em;text-transform:uppercase;text-align:center">Final</div>
@@ -168,17 +206,7 @@ export function renderEmployeeDetail(container, empId, user) {
                 }).join('')}
                 <div style="text-align:center;font-size:14px;font-weight:700;color:var(--sub)">${auto != null ? Math.round(auto * 10) / 10 : '—'}</div>
                 <div style="display:flex;justify-content:center" data-final-cell="${esc(q.id)}">
-                  ${(() => {
-                    const warn = isFractional(fin.score);
-                    if (!canEdit) {
-                      return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:14.5px;font-weight:700;color:${warn ? 'var(--warn)' : (fin.score != null ? 'var(--ink)' : 'var(--faint)')}"${warn ? ' title="Điểm trung bình lẻ — Manager cần làm tròn về số nguyên"' : ''}>${fin.score != null ? fin.score : '—'}${warn ? icon('alert', { size: 11, color: 'var(--warn)', stroke: 2.4 }) : ''}</span>`;
-                    }
-                    return `<button class="final-cell-btn${fin.edited ? ' edited' : ''}${warn ? ' warn' : ''}" data-final="${esc(q.id)}"
-                      ${warn ? 'title="Điểm trung bình lẻ — cần làm tròn về số nguyên"' : ''}>
-                      <span style="font-size:14.5px;font-weight:700;color:${warn ? 'var(--warn)' : (fin.score != null ? 'var(--ink)' : 'var(--faint)')}">${fin.score != null ? fin.score : '—'}</span>
-                      ${warn ? icon('alert', { size: 11, color: 'var(--warn)', stroke: 2.4 }) : icon('edit', { size: 11, color: fin.edited ? 'var(--blue)' : 'var(--faint)' })}
-                    </button>`;
-                  })()}
+                  ${finalCellHtml(fin, canEdit, q.id)}
                 </div>
               </div>
               ${qCommentsHtml(submitted, empReviews, q.id)}`;
@@ -186,28 +214,8 @@ export function renderEmployeeDetail(container, empId, user) {
             </div>
           </div>`;
         }).join('')}
-      </div>
-
-      ${canEdit && anyEdited ? `
-      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;color:var(--sub)">
-        <span style="width:12px;height:12px;border-radius:3px;background:var(--blue-hi);border:1.5px solid var(--blue);display:inline-block"></span>
-        Ô tô màu xanh = điểm final đã được Manager chỉnh sửa thủ công.
-        <button class="text-underline-btn" data-reset-all style="color:var(--blue);font-weight:700;margin-left:4px">Đặt lại tất cả về trung bình</button>
-      </div>` : ''}
-
-      <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin:32px 0 14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Nhận xét tổng quan từ reviewer</h2>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        ${commentsHtml(submitted, empReviews)}
-      </div>`}
-  `;
-
-  wire(container, emp, user);
+      </div>`;
 }
-
-/* ---------- Weighted result helpers ---------- */
-
-// 2-decimal display formatter (computation always uses raw values upstream)
-const fmt2 = v => v == null ? '—' : (Math.round(v * 100) / 100).toFixed(2);
 
 // Inline group overview strip: per-group average score + weight chips.
 // Shown above the score table so reviewers/managers see the group breakdown.
@@ -217,7 +225,7 @@ function groupOverviewHtml(empId) {
   return `
     <div class="card" style="padding:16px 18px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px">
-        <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">Tổng quan theo nhóm</div>
+        <div class="u-label">Tổng quan theo nhóm</div>
         <div style="font-size:12px;font-weight:600;color:var(--sub)">Điểm TB từng nhóm câu hỏi</div>
       </div>
       <div class="grp-overview-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
@@ -253,9 +261,9 @@ function resultBarHtml(empId) {
           <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">Kết quả cuối cùng (có trọng số)</div>
           <div style="font-size:12px;color:rgba(255,255,255,0.7)">Σ (điểm TB nhóm × trọng số)</div>
         </div>
-        ${band ? `<span style="display:inline-flex;align-items:center;gap:7px;background:${BAND_BGS[band.id]};border:1.5px solid ${BAND_COLORS[band.id]};padding:6px 12px;border-radius:999px">
-          <span style="width:22px;height:22px;border-radius:50%;background:${BAND_COLORS[band.id]};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(band.id)}</span>
-          <span style="font-size:13px;font-weight:700;color:${BAND_COLORS[band.id]}">${esc(band.label)}</span>
+        ${band ? `<span style="display:inline-flex;align-items:center;gap:7px;background:${bandBg(band.id)};border:1.5px solid ${bandColor(band.id)};padding:6px 12px;border-radius:999px">
+          <span style="width:22px;height:22px;border-radius:50%;background:${bandColor(band.id)};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(band.id)}</span>
+          <span style="font-size:13px;font-weight:700;color:${bandColor(band.id)}">${esc(band.label)}</span>
         </span>` : ''}
         <div style="display:flex;align-items:baseline;gap:3px">
           <span style="font-size:26px;font-weight:700;color:#fff;letter-spacing:-0.02em">${fmt2(final)}</span>
@@ -318,15 +326,15 @@ function openResultModal(empId) {
           </div>
         </div>
 
-        <div style="border:1.5px solid ${band ? BAND_COLORS[band.id] : 'var(--ok)'};background:${band ? BAND_BGS[band.id] : '#E6F6EF'};border-radius:12px;padding:18px;text-align:center;margin-bottom:18px">
-          <div style="font-size:34px;font-weight:700;color:${band ? BAND_COLORS[band.id] : 'var(--ok)'};letter-spacing:-0.03em">${fmt2(final)}<span style="font-size:16px;color:var(--faint);font-weight:600"> / 5.00</span></div>
+        <div style="border:1.5px solid ${band ? bandColor(band.id) : 'var(--ok)'};background:${band ? bandBg(band.id) : '#E6F6EF'};border-radius:12px;padding:18px;text-align:center;margin-bottom:18px">
+          <div style="font-size:34px;font-weight:700;color:${band ? bandColor(band.id) : 'var(--ok)'};letter-spacing:-0.03em">${fmt2(final)}<span style="font-size:16px;color:var(--faint);font-weight:600"> / 5.00</span></div>
         </div>
 
         <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px">Thang phân loại</div>
         <div style="display:grid;grid-template-columns:repeat(${allBands.length},1fr);gap:8px;margin-bottom:16px">
           ${allBands.map(b => {
-            const c = BAND_COLORS[b.id] || 'var(--sub)';
-            const bg = BAND_BGS[b.id] || '#FAFBFC';
+            const c = bandColor(b.id);
+            const bg = bandBg(b.id);
             const on = band && b.id === band.id;
             return `
             <div style="border:1.5px solid ${on ? c : 'var(--line)'};border-radius:10px;padding:12px 6px;text-align:center;background:${on ? bg : '#FAFBFC'};transition:border-color .15s,background .15s">
@@ -417,15 +425,10 @@ function wire(container, emp, user) {
   if (resultBtn) resultBtn.addEventListener('click', () => openResultModal(emp.id));
 
   // group collapse / expand
-  container.querySelectorAll('[data-ed-toggle]').forEach(btn => {
-    const gid = btn.dataset.edToggle;
-    const body = container.querySelector(`[data-ed-body="${CSS.escape(gid)}"]`);
-    const chevron = container.querySelector(`[data-ed-chevron="${CSS.escape(gid)}"]`);
-    btn.addEventListener('click', () => {
-      const collapsed = body.classList.toggle('sr-grp-body--collapsed');
-      chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
-      btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)';
-    });
+  wireCollapsibles(container, {
+    toggleAttr: 'data-ed-toggle', bodyAttr: 'data-ed-body', chevronAttr: 'data-ed-chevron',
+    collapsedClass: 'sr-grp-body--collapsed',
+    onToggle: (btn, collapsed) => { btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)'; },
   });
 
   // final score (manager only): click → inline number input; Enter/blur
