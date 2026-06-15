@@ -270,14 +270,26 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
 .sr-grp-body { overflow: hidden; transition: max-height .28s cubic-bezier(.4,0,.2,1), opacity .22s; max-height: 9999px; opacity: 1; }
 .sr-grp-body--collapsed { max-height: 0 !important; opacity: 0; }
 
-/* Inline per-question comment zone — subtly tinted so it reads as a distinct
-   band beneath the (white) question score row, without adding color noise */
-.sr-qcomments { padding: 11px 22px 15px; background: #FAFBFC; border-top: 1px dashed var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; }
-.sr-qc-label { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; color: var(--faint); letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 1px; }
-/* one reviewer's comment — neutral; the small avatar carries the only color */
-.sr-qcomment { display: flex; gap: 10px; align-items: flex-start; }
-.sr-qcomment .sr-qc-name { font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; display: block; margin-bottom: 2px; }
-.sr-qcomment .sr-qc-text { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
+/* Inline per-question comment zone — tinted + indented and tied to the question
+   row ABOVE it: no top border (so it reads as an extension of that row) and a
+   short vertical accent bar on the left (a "reply thread" cue) make it clear the
+   comments belong to the question directly above, not the one below. */
+.sr-qcomments { position: relative; padding: 9px 22px 11px 40px; background: #FAFBFC; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.sr-qcomments::before { content: ''; position: absolute; left: 26px; top: 3px; bottom: 10px; width: 2px; border-radius: 2px; background: #CFD8E3; }
+/* one reviewer's comment — compact single line: name + text inline, the small
+   avatar carries the only color */
+.sr-qcomment { display: flex; gap: 8px; align-items: flex-start; }
+.sr-qcomment .sr-qc-body { font-size: 13px; line-height: 1.45; }
+.sr-qcomment .sr-qc-name { font-weight: 700; color: var(--ink); }
+.sr-qcomment .sr-qc-name::after { content: ' · '; color: var(--faint); font-weight: 400; }
+.sr-qcomment .sr-qc-text { color: var(--ink); }
+/* "Ẩn nhận xét" collapsed state — hide every inline comment block at once.
+   !important beats the equal-specificity mobile rule inside the media query. */
+.score-table--hide-comments .sr-qcomments { display: none !important; }
+/* comment rows drop their own bottom border (the comment block normally
+   supplies it), so add it back when comments are hidden — scoped to question
+   rows so the header row is untouched; inline borders still win → no doubling */
+.score-table--hide-comments .sr-grp-body .sr-row { border-bottom: 1px solid var(--line); }
 
 .comment-toggle { margin-top: 12px; background: none; border: none; color: var(--blue); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; }
 .group-nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 6px; text-decoration: none; transition: background .13s; border: none; background: transparent; width: 100%; cursor: pointer; text-align: left; }

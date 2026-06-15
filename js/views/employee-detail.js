@@ -17,6 +17,11 @@ import { inLeaderDept } from '../auth.js';
 import { nav } from '../router.js';
 import { STATUS, ROLE } from '../constants.js';
 
+// Whether the inline per-question comments are collapsed. Module-level so the
+// "Ẩn/Hiện nhận xét" toggle survives re-renders (e.g. when a manager edits a
+// Final score) — same pattern as the list filters in views/employees.js.
+let qCommentsHidden = false;
+
 export function renderEmployeeDetail(container, empId, user) {
   const emp = state.employees.find(e => e.id === empId);
   if (!emp) {
@@ -44,6 +49,7 @@ export function renderEmployeeDetail(container, empId, user) {
   const allSubmitted = assigned.length > 0 && submitted.length === assigned.length;
   const anyEdited = Object.values(overrides).some(x => x && x.edited);
   const fractional = fractionalQuestionsOf(empId);
+  const hasQComments = state.groups.some(g => g.items.some(q => qComments(submitted, empReviews, q.id).length));
 
   const GRID = `display:grid;grid-template-columns:2.4fr repeat(${submitted.length}, 64px) 70px 96px;gap:0`;
 
@@ -117,10 +123,16 @@ export function renderEmployeeDetail(container, empId, user) {
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:14px;flex-wrap:wrap">
         <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Bảng điểm chi tiết</h2>
-        <div style="font-size:12.5px;color:var(--sub);display:flex;align-items:center;gap:6px">
-          ${canEdit
-            ? `${icon('edit', { size: 13, color: 'var(--blue)' })} Điểm final tự động tính trung bình — có thể chỉnh sửa`
-            : `${icon('lock', { size: 13, color: 'var(--faint)' })} Điểm final tự động tính trung bình — chỉ xem`}
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          ${hasQComments ? `
+          <button class="text-underline-btn" data-qc-toggle style="display:inline-flex;align-items:center;gap:5px">
+            ${icon('chat', { size: 13, color: 'var(--sub)', stroke: 2.2 })}<span data-qc-label>${qCommentsHidden ? 'Hiện nhận xét' : 'Ẩn nhận xét'}</span>
+          </button>` : ''}
+          <div style="font-size:12.5px;color:var(--sub);display:flex;align-items:center;gap:6px">
+            ${canEdit
+              ? `${icon('edit', { size: 13, color: 'var(--blue)' })} Điểm final tự động tính trung bình — có thể chỉnh sửa`
+              : `${icon('lock', { size: 13, color: 'var(--faint)' })} Điểm final tự động tính trung bình — chỉ xem`}
+          </div>
         </div>
       </div>
 
@@ -173,7 +185,7 @@ function finalCellHtml(fin, canEdit, qid) {
 // group card per question group (auto-average + final cell + inline comments).
 function scoreTableHtml(empId, submitted, empReviews, canEdit, GRID) {
   return `
-      <div class="score-table" style="display:flex;flex-direction:column;gap:10px">
+      <div class="score-table${qCommentsHidden ? ' score-table--hide-comments' : ''}" style="display:flex;flex-direction:column;gap:10px">
         <div class="card" style="padding:0;overflow:hidden">
           <div class="sr-row" style="${GRID};padding:12px 22px;background:#FAFBFC;align-items:center">
             <div class="u-label">Câu hỏi</div>
@@ -377,13 +389,11 @@ function qCommentsHtml(submitted, empReviews, qid) {
   if (!cs.length) return '';
   return `
     <div class="sr-qcomments">
-      <div class="sr-qc-label">${icon('chat', { size: 12, color: 'var(--faint)', stroke: 2.2 })} Nhận xét (${cs.length})</div>
       ${cs.map(c => `
       <div class="sr-qcomment">
-        ${avatar(c.u.name, 24)}
-        <div style="flex:1;min-width:0">
-          <span class="sr-qc-name">${esc(c.u.name)}</span>
-          <div class="sr-qc-text">${esc(c.text)}</div>
+        ${avatar(c.u.name, 20)}
+        <div class="sr-qc-body" style="flex:1;min-width:0">
+          <span class="sr-qc-name">${esc(c.u.name)}</span><span class="sr-qc-text">${esc(c.text)}</span>
         </div>
       </div>`).join('')}
     </div>`;
@@ -423,6 +433,16 @@ function wire(container, emp, user) {
 
   const resultBtn = container.querySelector('[data-result]');
   if (resultBtn) resultBtn.addEventListener('click', () => openResultModal(emp.id));
+
+  // Ẩn/Hiện toàn bộ nhận xét inline — toggle live (không re-render).
+  const qcToggle = container.querySelector('[data-qc-toggle]');
+  if (qcToggle) qcToggle.addEventListener('click', () => {
+    qCommentsHidden = !qCommentsHidden;
+    const table = container.querySelector('.score-table');
+    if (table) table.classList.toggle('score-table--hide-comments', qCommentsHidden);
+    const label = qcToggle.querySelector('[data-qc-label]');
+    if (label) label.textContent = qCommentsHidden ? 'Hiện nhận xét' : 'Ẩn nhận xét';
+  });
 
   // group collapse / expand
   wireCollapsibles(container, {
