@@ -252,7 +252,7 @@ function periodLockedError() {
 }
 
 export function assignReviewers(empId, reviewerIds /* array of empIds */) {
-  if (!isManagerEditAllowed()) return periodLockedError();
+  if (reviewPeriodStatus().expired) return periodLockedError();
   const emp = state.employees.find(e => e.id === empId);
   const prev = emp ? reviewerIdsOf(emp) : [];
   const removed = prev.filter(id => !reviewerIds.includes(id));

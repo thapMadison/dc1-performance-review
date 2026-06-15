@@ -6,7 +6,7 @@ import { esc, icon, avatar, statusPill, progress, pageHead, emptyState, hiCard, 
 import { state, allQuestionIds, reviewOf, answeredCount } from '../store.js';
 import { nav } from '../router.js';
 import { APP_CYCLE } from '../firebase-config.js';
-import { STATUS } from '../constants.js';
+import { STATUS, ROLE } from '../constants.js';
 
 export function renderMyReviews(container, user) {
   const qids = allQuestionIds();
@@ -25,7 +25,7 @@ export function renderMyReviews(container, user) {
   container.innerHTML = `
     ${pageHead({ eyebrow: 'Reviewer', title: 'Đánh giá của tôi', desc: `Những nhân viên bạn được phân công đánh giá trong chu kỳ ${APP_CYCLE}.` })}
 
-    ${period.locked ? `
+    ${period.locked && user.role !== ROLE.MANAGER ? `
     <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#EEF1F8;border:1px solid var(--line);margin-bottom:18px">
       ${icon('lock', { size: 18, color: '#5B6B8A' })}
       <div style="font-size:13.5px;color:#3D4B66;font-weight:600">

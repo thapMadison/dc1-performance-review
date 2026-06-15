@@ -29,7 +29,7 @@ export function renderEmployeeDetail(container, empId, user) {
   // only the pre-start lock blocks it. Reviewer assignment is a setup action,
   // gated to the full active window.
   const canEdit = isManager && !period.beforeStart;
-  const canAssign = isManager && period.active;
+  const canAssign = isManager && !period.expired;
   if (user.role === ROLE.LEADER && !inLeaderDept(user, emp)) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'lock', title: 'Không có quyền xem', desc: `Nhân viên này không thuộc phòng ban ${user.dept} của bạn.` })}</div>`;
     return;
@@ -50,7 +50,7 @@ export function renderEmployeeDetail(container, empId, user) {
   container.innerHTML = `
     <button class="back-btn" data-back>← Danh sách nhân viên</button>
 
-    ${period.beforeStart ? `
+    ${period.beforeStart && !isManager ? `
     <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#EEF1F8;border:1px solid var(--line);margin-bottom:18px">
       ${icon('lock', { size: 18, color: '#5B6B8A' })}
       <div style="font-size:13.5px;color:#3D4B66;font-weight:600">Kỳ đánh giá chưa bắt đầu. Bạn chỉ có thể xem.</div>
