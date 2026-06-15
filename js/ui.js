@@ -5,6 +5,8 @@
 
 export const LOGO = 'assets/logo-gorilla.png';
 
+export const GROUP_COLORS = ['#E8743B', '#3B7BE8', '#1E9E6A', '#7C5CFC', '#D14D8B', '#29ABE2'];
+
 /* ---------- escaping ---------- */
 export function esc(s) {
   return String(s == null ? '' : s)

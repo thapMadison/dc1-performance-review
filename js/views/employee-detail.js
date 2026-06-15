@@ -5,7 +5,7 @@
    Fractional auto-averages are flagged so the Manager rounds them.
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark } from '../ui.js';
+import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS } from '../ui.js';
 import {
   state, reviewerIdsOf, avgForQuestion, finalForQuestion, empAvg,
   isFractional, fractionalQuestionsOf,
@@ -108,20 +108,26 @@ export function renderEmployeeDetail(container, empId, user) {
         </div>
       </div>` : ''}
 
-      <div class="card score-table" style="padding:0;overflow:hidden">
-        <div class="sr-row" style="${GRID};padding:12px 22px;background:#FAFBFC;border-bottom:1px solid var(--line);align-items:center">
-          <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">Câu hỏi</div>
-          ${submitted.map(u => `<div title="${esc(u.name)}" style="display:flex;justify-content:center">${avatar(u.name, 28)}</div>`).join('')}
-          <div style="font-size:10px;font-weight:700;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;text-align:center">TB</div>
-          <div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:0.06em;text-transform:uppercase;text-align:center">Final</div>
+      <div class="score-table" style="display:flex;flex-direction:column;gap:10px">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="sr-row" style="${GRID};padding:12px 22px;background:#FAFBFC;align-items:center">
+            <div style="font-size:11px;font-weight:700;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase">Câu hỏi</div>
+            ${submitted.map(u => `<div title="${esc(u.name)}" style="display:flex;justify-content:center">${avatar(u.name, 28)}</div>`).join('')}
+            <div style="font-size:10px;font-weight:700;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;text-align:center">TB</div>
+            <div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:0.06em;text-transform:uppercase;text-align:center">Final</div>
+          </div>
         </div>
 
-        ${state.groups.map((g, gi) => `
-          <div class="sr-grp">
-            <div class="sr-band" style="padding:9px 22px;background:#F3F6F9;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy);letter-spacing:0.02em;display:flex;align-items:center;gap:8px">
-              <span style="width:18px;height:18px;border-radius:5px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px">${gi + 1}</span>
-              ${esc(g.name)}
-            </div>
+        ${state.groups.map((g, gi) => {
+          const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+          return `
+          <div class="card sr-grp" style="padding:0;overflow:hidden;border-left:3px solid ${color}">
+            <button class="sr-band" data-ed-toggle="${esc(g.id)}" style="padding:9px 22px;background:#F3F6F9;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy);letter-spacing:0.02em;display:flex;align-items:center;gap:8px;width:100%;border:none;border-bottom:1px solid var(--line);cursor:pointer;font-family:var(--font);text-align:left;transition:background .14s">
+              <span style="width:18px;height:18px;border-radius:5px;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">${gi + 1}</span>
+              <span style="flex:1">${esc(g.name)}</span>
+              <svg data-ed-chevron="${esc(g.id)}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="sr-grp-body" data-ed-body="${esc(g.id)}">
             ${g.items.map(q => {
               const auto = avgForQuestion(empId, q.id);
               const fin = finalForQuestion(empId, q.id);
@@ -138,7 +144,6 @@ export function renderEmployeeDetail(container, empId, user) {
                   ${(() => {
                     const warn = isFractional(fin.score);
                     if (!canEdit) {
-                      // read-only (leader): plain value, flagged when fractional
                       return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:14.5px;font-weight:700;color:${warn ? 'var(--warn)' : (fin.score != null ? 'var(--ink)' : 'var(--faint)')}"${warn ? ' title="Điểm trung bình lẻ — Manager cần làm tròn về số nguyên"' : ''}>${fin.score != null ? fin.score : '—'}${warn ? icon('alert', { size: 11, color: 'var(--warn)', stroke: 2.4 }) : ''}</span>`;
                     }
                     return `<button class="final-cell-btn${fin.edited ? ' edited' : ''}${warn ? ' warn' : ''}" data-final="${esc(q.id)}"
@@ -150,13 +155,17 @@ export function renderEmployeeDetail(container, empId, user) {
                 </div>
               </div>`;
             }).join('')}
-          </div>`).join('')}
+            </div>
+          </div>`;
+        }).join('')}
 
-        <div class="sr-row" style="${GRID};padding:14px 22px;background:var(--navy);align-items:center">
-          <div style="font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.01em">Điểm trung bình tổng</div>
-          ${submitted.map(() => '<div></div>').join('')}
-          <div></div>
-          <div style="display:flex;justify-content:center"><span style="font-size:19px;font-weight:700;color:#fff">${avg != null ? avg : '—'}</span></div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="sr-row" style="${GRID};padding:14px 22px;background:var(--navy);align-items:center">
+            <div style="font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.01em">Điểm trung bình tổng</div>
+            ${submitted.map(() => '<div></div>').join('')}
+            <div></div>
+            <div style="display:flex;justify-content:center"><span style="font-size:19px;font-weight:700;color:#fff">${avg != null ? avg : '—'}</span></div>
+          </div>
         </div>
       </div>
 
@@ -206,6 +215,18 @@ function wire(container, emp, user) {
 
   const resetAll = container.querySelector('[data-reset-all]');
   if (resetAll) resetAll.addEventListener('click', () => resetAllFinals(emp.id));
+
+  // group collapse / expand
+  container.querySelectorAll('[data-ed-toggle]').forEach(btn => {
+    const gid = btn.dataset.edToggle;
+    const body = container.querySelector(`[data-ed-body="${CSS.escape(gid)}"]`);
+    const chevron = container.querySelector(`[data-ed-chevron="${CSS.escape(gid)}"]`);
+    btn.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('sr-grp-body--collapsed');
+      chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
+      btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)';
+    });
+  });
 
   // final score (manager only): click → inline number input; Enter/blur
   // commits (rounded to a whole point 1–5), Esc cancels.

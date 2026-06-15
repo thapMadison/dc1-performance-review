@@ -2,7 +2,7 @@
    MANAGER · QUESTIONS — question set grouped view + Excel import
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, pageHead, emptyState, btn, hiCard, NOTCH } from '../ui.js';
+import { esc, pageHead, emptyState, btn, hiCard, NOTCH, GROUP_COLORS } from '../ui.js';
 import { state } from '../store.js';
 import { openImportModal } from './import-modal.js';
 
@@ -32,27 +32,42 @@ export function renderQuestions(container) {
     </div>
 
     <div style="display:flex;flex-direction:column;gap:18px">
-      ${groups.map((g, gi) => `
-        <div class="card" style="padding:0;overflow:hidden">
-          <div style="display:flex;align-items:center;gap:11px;padding:16px 22px;background:#FAFBFC;border-bottom:1px solid var(--line)">
-            <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${gi + 1}</div>
-            <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em">${esc(g.name)}</h2>
-            <span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--faint)">${g.items.length} câu hỏi</span>
-          </div>
-          <div>
+      ${groups.map((g, gi) => {
+        const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+        return `
+        <div class="card q-group" style="padding:0;overflow:hidden;border-left:3px solid ${color}" data-gidx="${gi}">
+          <button class="q-group-header" data-toggle="${gi}" style="display:flex;align-items:center;gap:11px;padding:16px 22px;background:#FAFBFC;border-bottom:1px solid var(--line);width:100%;border:none;cursor:pointer;text-align:left">
+            <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${gi + 1}</div>
+            <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">${esc(g.name)}</h2>
+            <span style="font-size:12px;font-weight:600;color:var(--faint);margin-right:10px">${g.items.length} câu hỏi</span>
+            <svg class="q-chevron" data-chevron="${gi}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="q-group-body" data-body="${gi}">
             ${g.items.map((q, qi) => `
               <div style="display:flex;gap:14px;padding:14px 22px;${qi < g.items.length - 1 ? 'border-bottom:1px solid var(--line);' : ''}">
-                <span style="font-size:13px;font-weight:700;color:var(--faint);min-width:26px">${gi + 1}.${qi + 1}</span>
+                <span style="font-size:13px;font-weight:700;color:${color};min-width:26px">${gi + 1}.${qi + 1}</span>
                 <div style="flex:1">
                   <div style="font-size:14.5px;font-weight:700;color:var(--ink)">${esc(q.text)}</div>
                   ${q.hint ? `<div style="font-size:13px;color:var(--sub);margin-top:2px;line-height:1.45">${esc(q.hint)}</div>` : ''}
                 </div>
               </div>`).join('')}
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
       ${!groups.length ? `<div class="card">${emptyState({ icon: 'help', title: 'Chưa có bộ câu hỏi', desc: 'Import file Excel chứa các câu hỏi đánh giá theo nhóm để bắt đầu.' })}</div>` : ''}
     </div>
   `;
 
   container.querySelector('[data-import]').addEventListener('click', () => openImportModal('questions'));
+
+  container.querySelectorAll('[data-toggle]').forEach(btn => {
+    const idx = btn.dataset.toggle;
+    const body = container.querySelector(`[data-body="${idx}"]`);
+    const chevron = container.querySelector(`[data-chevron="${idx}"]`);
+    btn.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('q-group-body--collapsed');
+      chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
+      btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)';
+    });
+  });
 }

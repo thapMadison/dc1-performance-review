@@ -5,7 +5,7 @@
    on "Lưu nháp" / "Nộp" (so typing never fights re-renders).
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH } from '../ui.js';
+import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS } from '../ui.js';
 import { state, allQuestionIds, reviewOf, saveReview } from '../store.js';
 import { nav } from '../router.js';
 import { requestRender } from '../bus.js';
@@ -73,22 +73,24 @@ export function renderReviewForm(container, user, empId) {
         <div style="font-size:13.5px;color:#3D4B66;font-weight:600">Bản đánh giá đã được nộp và khóa. Bạn không thể chỉnh sửa nữa.</div>
       </div>` : ''}
 
-      ${state.groups.map((g, gi) => `
-      <div id="grp-${esc(g.id)}" class="group-anchor" style="margin-bottom:26px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${gi + 1}</div>
-          <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em">${esc(g.name)}</h2>
-          <div style="flex:1;height:1px;background:var(--line)"></div>
-          <span style="font-size:12px;font-weight:600;color:var(--faint)">${g.items.length} câu</span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:12px">
+      ${state.groups.map((g, gi) => {
+        const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+        return `
+      <div id="grp-${esc(g.id)}" class="card group-anchor" style="margin-bottom:26px;padding:0;overflow:hidden;border-left:3px solid ${color}">
+        <button class="rf-group-toggle" data-rf-toggle="${esc(g.id)}" style="display:flex;align-items:center;gap:11px;padding:14px 20px;width:100%;border:none;border-bottom:1px solid var(--line);background:#FAFBFC;cursor:pointer;text-align:left;transition:background .14s">
+          <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${gi + 1}</div>
+          <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">${esc(g.name)}</h2>
+          <span style="font-size:12px;font-weight:600;color:var(--faint);margin-right:8px">${g.items.length} câu</span>
+          <svg class="rf-chevron" data-rf-chevron="${esc(g.id)}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="rf-group-body" data-rf-body="${esc(g.id)}" style="display:flex;flex-direction:column;gap:0">
           ${g.items.map((q, qi) => {
             const a = s.answers[q.id] || { score: null, comment: '' };
             const showC = s.openComments[q.id] || a.comment;
             return `
-            <div class="card" style="padding:20px;border-color:${a.score != null ? '#29ABE240' : 'var(--line)'}">
+            <div style="padding:20px;${qi < g.items.length - 1 ? 'border-bottom:1px solid var(--line);' : ''}${a.score != null ? 'background:#FAFEFF;' : ''}">
               <div style="display:flex;gap:14px">
-                <div style="font-size:13px;font-weight:700;color:var(--faint);margin-top:1px;min-width:22px">${gi + 1}.${qi + 1}</div>
+                <div style="font-size:13px;font-weight:700;color:${color};margin-top:1px;min-width:22px">${gi + 1}.${qi + 1}</div>
                 <div style="flex:1">
                   <div style="font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:4px;letter-spacing:-0.01em">${esc(q.text)}</div>
                   ${q.hint ? `<div style="font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:16px">${esc(q.hint)}</div>` : ''}
@@ -101,7 +103,8 @@ export function renderReviewForm(container, user, empId) {
             </div>`;
           }).join('')}
         </div>
-      </div>`).join('')}
+      </div>`;
+      }).join('')}
     </div>
 
     <div class="review-rail" style="width:264px;flex-shrink:0;position:sticky;top:0;padding-top:52px">
@@ -118,15 +121,16 @@ export function renderReviewForm(container, user, empId) {
 
         <div style="display:flex;flex-direction:column;gap:2px;margin:18px 0 4px">
           ${state.groups.map((g, gi) => {
+            const color = GROUP_COLORS[gi % GROUP_COLORS.length];
             const gAns = g.items.filter(q => s.answers[q.id] && s.answers[q.id].score != null).length;
             const gDone = g.items.length > 0 && gAns === g.items.length;
             return `
-            <button class="group-nav-item" data-goto="${esc(g.id)}">
-              <span style="width:18px;height:18px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${gDone ? 'var(--ok)' : (gAns ? '#29ABE21A' : '#EEF1F4')};color:${gDone ? '#fff' : (gAns ? 'var(--blue)' : 'var(--faint)')}">
+            <button class="group-nav-item" data-goto="${esc(g.id)}" style="border-left:2px solid ${gDone ? 'var(--ok)' : color}">
+              <span style="width:18px;height:18px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${gDone ? 'var(--ok)' : color + '22'};color:${gDone ? '#fff' : color}">
                 ${gDone ? icon('check', { size: 11, stroke: 3 }) : `<span style="font-size:10px;font-weight:700">${gi + 1}</span>`}
               </span>
               <span style="flex:1;font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</span>
-              <span style="font-size:11px;font-weight:600;color:var(--faint)">${gAns}/${g.items.length}</span>
+              <span style="font-size:11px;font-weight:600;color:${gDone ? 'var(--ok)' : 'var(--faint)'}">${gAns}/${g.items.length}</span>
             </button>`;
           }).join('')}
         </div>
@@ -172,8 +176,25 @@ export function renderReviewForm(container, user, empId) {
 function wire(container, emp, user, locked, s, qids) {
   container.querySelector('[data-back]').addEventListener('click', () => nav('/myreviews'));
 
-  // jump to a group anchor inside the app scroller (plain # links would fight the hash router)
+  // group collapse / expand
+  container.querySelectorAll('[data-rf-toggle]').forEach(btn => {
+    const gid = btn.dataset.rfToggle;
+    const body = container.querySelector(`[data-rf-body="${CSS.escape(gid)}"]`);
+    const chevron = container.querySelector(`[data-rf-chevron="${CSS.escape(gid)}"]`);
+    btn.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('rf-group-body--collapsed');
+      chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
+    });
+  });
+
+  // jump to a group anchor — auto-expand the group if it is collapsed
   const goto = id => {
+    const body = container.querySelector(`[data-rf-body="${CSS.escape(id)}"]`);
+    const chevron = container.querySelector(`[data-rf-chevron="${CSS.escape(id)}"]`);
+    if (body && body.classList.contains('rf-group-body--collapsed')) {
+      body.classList.remove('rf-group-body--collapsed');
+      if (chevron) chevron.style.transform = '';
+    }
     const el = container.querySelector(`#grp-${CSS.escape(id)}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -297,11 +318,12 @@ function openSectionsSheet(s, qids, goto) {
       </div>
       <div class="sheet-body" style="display:flex;flex-direction:column;gap:2px;padding:0 12px 8px">
         ${state.groups.map((g, gi) => {
+          const color = GROUP_COLORS[gi % GROUP_COLORS.length];
           const gAns = g.items.filter(q => s.answers[q.id] && s.answers[q.id].score != null).length;
           const gDone = g.items.length > 0 && gAns === g.items.length;
           return `
-          <button class="group-nav-item" data-sheet-goto="${esc(g.id)}" style="padding:12px 10px">
-            <span style="width:20px;height:20px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${gDone ? 'var(--ok)' : (gAns ? '#29ABE21A' : '#EEF1F4')};color:${gDone ? '#fff' : (gAns ? 'var(--blue)' : 'var(--faint)')}">
+          <button class="group-nav-item" data-sheet-goto="${esc(g.id)}" style="padding:12px 10px;border-left:2px solid ${gDone ? 'var(--ok)' : color}">
+            <span style="width:20px;height:20px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${gDone ? 'var(--ok)' : color + '22'};color:${gDone ? '#fff' : color}">
               ${gDone ? icon('check', { size: 12, stroke: 3 }) : `<span style="font-size:11px;font-weight:700">${gi + 1}</span>`}
             </span>
             <span style="flex:1;font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left">${esc(g.name)}</span>

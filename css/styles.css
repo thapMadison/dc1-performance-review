@@ -256,6 +256,18 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
   width: 64px; height: 34px; text-align: center; border: 1.5px solid var(--blue); border-radius: 6px;
   font-size: 14px; font-weight: 700; color: var(--ink); outline: none; box-shadow: 0 0 0 3px #29ABE21A;
 }
+/* ---------- Collapsible question groups (questions view + review form) ---------- */
+.q-group-header { font-family: var(--font); transition: background .14s; }
+.q-group-header:hover { background: #F3F6F9 !important; }
+.q-group-body { overflow: hidden; transition: max-height .28s cubic-bezier(.4,0,.2,1), opacity .22s; max-height: 9999px; opacity: 1; }
+.q-group-body--collapsed { max-height: 0 !important; opacity: 0; }
+.rf-group-toggle:hover h2 { color: var(--blue); }
+.rf-group-body { overflow: hidden; transition: max-height .28s cubic-bezier(.4,0,.2,1), opacity .22s; max-height: 9999px; opacity: 1; }
+.rf-group-body--collapsed { max-height: 0 !important; opacity: 0; }
+.sr-band:hover { background: #ECF0F5 !important; }
+.sr-grp-body { overflow: hidden; transition: max-height .28s cubic-bezier(.4,0,.2,1), opacity .22s; max-height: 9999px; opacity: 1; }
+.sr-grp-body--collapsed { max-height: 0 !important; opacity: 0; }
+
 .comment-toggle { margin-top: 12px; background: none; border: none; color: var(--blue); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; }
 .group-nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 6px; text-decoration: none; transition: background .13s; border: none; background: transparent; width: 100%; cursor: pointer; text-align: left; }
 .group-nav-item:hover { background: #F3F6F9; }
