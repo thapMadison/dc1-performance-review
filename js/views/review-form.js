@@ -136,7 +136,9 @@ export function renderReviewForm(container, user, empId) {
   }
   const myId = user.empId;
   const existing = myId ? reviewOf(empId, myId) : null;
-  const assigned = myId && (emp.reviewerIds || {})[myId];
+  // Reviewers learn their assignment from the reverse-index (state.assignments);
+  // managers/leaders have the employee's reviewerIds loaded directly.
+  const assigned = myId && (!!(state.assignments && state.assignments[empId]) || (emp.reviewerIds || {})[myId]);
   if (!assigned && !existing) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'lock', title: 'Bạn không được phân công', desc: 'Bạn không phải là reviewer của nhân viên này.' })}</div>`;
     return;

@@ -18,6 +18,8 @@ export const state = {
   bands: null,           // [{ id, label, min, max }]  — classification thresholds, edited in DB
   managers: {},          // { emailKey: true }
   leaders: {},           // { emailKey: '<dept name>' }
+  emailToEmpId: {},      // { emailKey: empId }  — shared lookup, no sensitive data
+  assignments: {},       // reviewer view: { empId: { empId, name, title } } from /assignments/$myId
 };
 
 // Default classification bands (used until overridden in the DB under /bands).
@@ -45,7 +47,7 @@ export async function initStore(b) {
       state.authReady = true;
       if (!user) {
         state.dataReady = false;
-        state.groups = []; state.employees = []; state.reviews = {}; state.finals = {}; state.managers = {}; state.leaders = {};
+        state.groups = []; state.employees = []; state.reviews = {}; state.finals = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
       }
       notify();
     },
@@ -55,9 +57,23 @@ export async function initStore(b) {
       } else if (key === 'bands') {
         state.bands = Array.isArray(val) ? val.filter(Boolean) : (val ? Object.values(val) : null);
       } else if (key === 'employees') {
+        // Manager (full node) and leader (per-dept mirror) both arrive here
+        // as { empId: emp }. Reviewers do NOT read employees — their minimal
+        // roster is built from `assignments` below.
         state.employees = Object.entries(val || {})
           .map(([id, e]) => ({ id, dept: '', title: '', ...e, reviewerIds: e.reviewerIds || {} }))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+      } else if (key === 'assignments') {
+        // Reviewer reverse-index: { empId: { empId, name, title } }.
+        state.assignments = val || {};
+        // Build a minimal employee roster so the reviewer's views
+        // (my-reviews / review-form) can resolve names without the
+        // employees node. reviewerIds is left empty — assignment is
+        // authoritative for "who I review" via state.assignments.
+        state.employees = Object.values(state.assignments)
+          .filter(Boolean)
+          .map(a => ({ id: a.empId, name: a.name || '', title: a.title || '', dept: '', email: '', reviewerIds: {} }))
+          .sort((a, b) => a.name.localeCompare(b.name));
       } else {
         state[key] = val || {};
       }
@@ -103,6 +119,21 @@ export function allQuestionIds(groups = state.groups) {
 }
 
 export function reviewerIdsOf(emp) { return Object.keys(emp.reviewerIds || {}); }
+
+// Employees the current user (by their empId) is assigned to review.
+// Reviewers get this from the `assignments` reverse-index (they can't read
+// the employees node); managers/leaders fall back to scanning employees'
+// reviewerIds (they have the full/dept roster loaded).
+export function assignedToMe(myId) {
+  if (!myId) return [];
+  const fromIndex = Object.keys(state.assignments || {}).length
+    ? Object.values(state.assignments).filter(Boolean).map(a => a.empId)
+    : null;
+  const ids = fromIndex || state.employees.filter(e => (e.reviewerIds || {})[myId]).map(e => e.id);
+  return ids
+    .map(id => state.employees.find(e => e.id === id))
+    .filter(Boolean);
+}
 
 export function reviewOf(empId, reviewerId) {
   return (state.reviews[empId] && state.reviews[empId][reviewerId]) || null;

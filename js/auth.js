@@ -23,13 +23,17 @@ export function resolveUser(state) {
   const key = encodeEmailKey(email);
   const isManager = !!state.managers[key];
   const leaderDept = !isManager && typeof state.leaders[key] === 'string' ? state.leaders[key].trim() : null;
-  const myEmp = state.employees.find(e => String(e.email || '').toLowerCase() === email) || null;
+  // empId comes from the shared emailToEmpId index — reviewers no longer
+  // read the employees node, so we can't look themselves up there.
+  const empId = (state.emailToEmpId && state.emailToEmpId[key]) || null;
+  // Manager/leader still have employees loaded, so enrich name/title when present.
+  const myEmp = empId ? state.employees.find(e => e.id === empId) : null;
   return {
     email,
     name: au.name || (myEmp && myEmp.name) || email,
     role: isManager ? ROLE.MANAGER : (leaderDept ? ROLE.LEADER : ROLE.REVIEWER),
     dept: leaderDept,
-    empId: myEmp ? myEmp.id : null,
+    empId,
     title: myEmp ? myEmp.title : '',
   };
 }

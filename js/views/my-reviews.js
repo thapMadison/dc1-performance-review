@@ -3,7 +3,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { esc, icon, avatar, statusPill, progress, pageHead, emptyState, hiCard, countdownBanner, reviewPeriodStatus } from '../ui.js';
-import { state, allQuestionIds, reviewOf, answeredCount } from '../store.js';
+import { state, allQuestionIds, reviewOf, answeredCount, assignedToMe } from '../store.js';
 import { nav } from '../router.js';
 import { APP_CYCLE } from '../firebase-config.js';
 import { STATUS, ROLE } from '../constants.js';
@@ -11,7 +11,7 @@ import { STATUS, ROLE } from '../constants.js';
 export function renderMyReviews(container, user) {
   const qids = allQuestionIds();
   const myId = user.empId;
-  const mine = myId ? state.employees.filter(e => (e.reviewerIds || {})[myId]) : [];
+  const mine = assignedToMe(myId);
   const done = mine.filter(e => { const r = reviewOf(e.id, myId); return r && r.status === STATUS.SUBMITTED; }).length;
 
   const cards = [

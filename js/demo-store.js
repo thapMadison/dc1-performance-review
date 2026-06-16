@@ -4,8 +4,9 @@
    Firebase credentials. Seed data mirrors the design prototype.
 ═══════════════════════════════════════════════════════════════ */
 
-import { STATUS, ROLE, COLLECTIONS } from './constants.js';
+import { STATUS, ROLE, COLLECTIONS_SHARED } from './constants.js';
 import { DEFAULT_BANDS } from './store.js';
+import { encodeEmailKey } from './auth.js';
 
 const KEY = 'madison_pr_demo_v5';
 const AUTH_KEY = 'madison_pr_demo_auth';
@@ -109,8 +110,28 @@ function seed() {
   };
 }
 
+/* Derive the RBAC mirrors/indexes the real backend stores alongside the
+   canonical nodes, so the demo emits the same shape per role. */
+function deriveEmailToEmpId(employees) {
+  const out = {};
+  Object.entries(employees || {}).forEach(([id, e]) => { out[encodeEmailKey(e.email)] = id; });
+  return out;
+}
+function deriveAssignments(employees) {
+  const out = {};
+  Object.entries(employees || {}).forEach(([id, e]) => {
+    Object.keys(e.reviewerIds || {}).forEach(rid => {
+      if (!out[rid]) out[rid] = {};
+      out[rid][id] = { empId: id, name: e.name || '', title: e.title || '' };
+    });
+  });
+  return out;
+}
+function deptOf(employees, empId) { return ((employees[empId] || {}).dept || '').trim(); }
+
 let data = load();
 let handlers = null;
+let currentEmail = null;   // demo account currently signed in
 
 function load() {
   try {
@@ -124,10 +145,58 @@ function load() {
 function persist() {
   try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* private mode */ }
 }
+function clone(v) { return JSON.parse(JSON.stringify(v ?? null)); }
+
+// Emit the same per-role view the real backend (RBAC rules + role-scoped
+// subscriptions) would expose, so demo mode faithfully reproduces what each
+// role can and cannot see.
 function emitAll() {
   if (!handlers) return;
-  COLLECTIONS.forEach(key =>
-    handlers.onData(key, JSON.parse(JSON.stringify(data[key] ?? null))));
+
+  // Shared nodes — everyone signed in receives these.
+  const emailToEmpId = deriveEmailToEmpId(data.employees);
+  const shared = { ...data, emailToEmpId };
+  COLLECTIONS_SHARED.forEach(key => handlers.onData(key, clone(shared[key])));
+
+  if (!currentEmail) return;
+  const key = encodeEmailKey(currentEmail.toLowerCase());
+  const isManager = !!(data.managers || {})[key];
+  const leaderDept = !isManager && typeof (data.leaders || {})[key] === 'string'
+    ? data.leaders[key].trim() : null;
+
+  if (isManager) {
+    handlers.onData('employees', clone(data.employees));
+    handlers.onData('reviews', clone(data.reviews));
+    handlers.onData('finals', clone(data.finals));
+    return;
+  }
+
+  if (leaderDept) {
+    // per-dept slice of each node
+    const emps = {}, revs = {}, fins = {};
+    Object.entries(data.employees || {}).forEach(([id, e]) => {
+      if ((e.dept || '').trim() === leaderDept) {
+        emps[id] = e;
+        if (data.reviews[id]) revs[id] = data.reviews[id];
+        if (data.finals[id]) fins[id] = data.finals[id];
+      }
+    });
+    handlers.onData('employees', clone(emps));
+    handlers.onData('reviews', clone(revs));
+    handlers.onData('finals', clone(fins));
+    return;
+  }
+
+  // reviewer — assignments + only their own reviews of assigned employees
+  const myId = emailToEmpId[key] || null;
+  const assignments = myId ? (deriveAssignments(data.employees)[myId] || {}) : {};
+  handlers.onData('assignments', clone(assignments));
+  const myReviews = {};
+  Object.keys(assignments).forEach(empId => {
+    const r = data.reviews[empId] && data.reviews[empId][myId];
+    if (r) myReviews[empId] = { [myId]: r };
+  });
+  handlers.onData('reviews', clone(myReviews));
 }
 function mutate(fn) { fn(data); persist(); emitAll(); }
 
@@ -140,9 +209,11 @@ export const backend = {
     const email = localStorage.getItem(AUTH_KEY);
     const acc = DEMO_ACCOUNTS.find(a => a.email === email);
     if (acc) {
+      currentEmail = acc.email;
       emitAll();
       handlers.onAuth({ email: acc.email, name: acc.name });
     } else {
+      currentEmail = null;
       handlers.onAuth(null);
     }
   },
@@ -155,12 +226,14 @@ export const backend = {
     const acc = DEMO_ACCOUNTS.find(a => a.email === email);
     if (!acc) return;
     localStorage.setItem(AUTH_KEY, email);
+    currentEmail = acc.email;
     emitAll();
     handlers.onAuth({ email: acc.email, name: acc.name });
   },
 
   async logout() {
     localStorage.removeItem(AUTH_KEY);
+    currentEmail = null;
     handlers.onAuth(null);
   },
 
