@@ -108,6 +108,17 @@ function overallBandRowHtml(qids, s) {
 // One in-progress form session at a time (reset when empId/reviewer changes)
 let session = null;
 
+// Auto-save state lives at module scope so it survives the frequent full
+// re-renders (changing a score calls requestRender → renderReviewForm → wire,
+// which would otherwise drop a timer declared inside wire()).
+let autosaveTimer = null;
+let autosaveInFlight = false;
+const AUTOSAVE_DELAY = 2500;
+// Page-level listeners (visibilitychange / beforeunload) are registered once per
+// wire() call; we keep references so each render removes the previous pair before
+// adding new ones — avoids stacking duplicate listeners across re-renders.
+let autosavePageListeners = null;
+
 function getSession(empId, reviewerId) {
   const existing = reviewOf(empId, reviewerId);
   if (session && session.empId === empId && session.reviewerId === reviewerId) {
@@ -135,7 +146,21 @@ function getSession(empId, reviewerId) {
   session = { empId, reviewerId, answers, openComments, overallComment, saved: false, dirty: false, hydrated: !!existing };
   return session;
 }
-export function clearReviewSession() { session = null; }
+export function clearReviewSession() {
+  session = null;
+  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+  autosaveInFlight = false;
+  if (autosavePageListeners) {
+    document.removeEventListener('visibilitychange', autosavePageListeners.vis);
+    window.removeEventListener('beforeunload', autosavePageListeners.unload);
+    autosavePageListeners = null;
+  }
+}
+
+// Short "HH:MM" timestamp for the auto-save status line.
+function fmtSavedTime(ts) {
+  return new Date(ts).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
 
 export function renderReviewForm(container, user, empId) {
   const emp = state.employees.find(e => e.id === empId);
@@ -241,6 +266,7 @@ export function renderReviewForm(container, user, empId) {
         <div class="rail-actions" style="display:flex;flex-direction:column;gap:9px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
           ${btn({ label: submitLabel, variant: 'primary', full: true, icon: canSubmit ? 'check' : undefined, disabled: !canSubmit, attrs: 'data-submit' })}
           ${btn({ label: s.saved ? 'Đã lưu nháp' : 'Lưu bản nháp', variant: 'ghost', full: true, icon: s.saved ? 'check' : undefined, attrs: 'data-save' })}
+          <div data-autosave-status style="min-height:14px;font-size:11.5px;color:var(--faint);text-align:center;line-height:1.4">${existing && existing.updatedAt ? `Đã lưu nháp lúc ${fmtSavedTime(existing.updatedAt)}` : ''}</div>
         </div>` : ''}
         </div>
       </div>
@@ -276,7 +302,18 @@ export function renderReviewForm(container, user, empId) {
 }
 
 function wire(container, emp, user, locked, s, qids) {
-  container.querySelector('[data-back]').addEventListener('click', () => nav('/myreviews'));
+  // Back: flush any pending (debounced) draft before leaving so an edit typed
+  // within the auto-save window isn't lost. Fire-and-forget — navigation isn't
+  // blocked on the save (the draft write path is the same one auto-save uses).
+  container.querySelector('[data-back]').addEventListener('click', () => {
+    if (!locked && s.dirty && !autosaveInFlight) {
+      if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+      saveReview(s.empId, s.reviewerId, {
+        status: STATUS.DRAFT, answers: s.answers, overallComment: s.overallComment, submittedAt: null,
+      }).catch(() => {});
+    }
+    nav('/myreviews');
+  });
 
   // group collapse / expand
   wireCollapsibles(container, {
@@ -314,6 +351,66 @@ function wire(container, emp, user, locked, s, qids) {
 
   if (locked) return;
 
+  // ---- auto-save (draft) ---------------------------------------------------
+  // Debounced background draft save. Never calls requestRender() — it only
+  // pokes the [data-autosave-status] line directly, so the caret stays put
+  // while the reviewer is typing. State (timer/inFlight) is module-scoped so
+  // it survives the re-render that scoring a question triggers.
+  const setAutosaveStatus = (text, color) => {
+    const el = container.querySelector('[data-autosave-status]');
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = color || 'var(--faint)';
+  };
+
+  const flushAutosave = async () => {
+    if (locked || autosaveInFlight || !s.dirty) return;
+    if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+    autosaveInFlight = true;
+    setAutosaveStatus('Đang lưu…');
+    try {
+      await saveReview(s.empId, s.reviewerId, {
+        status: STATUS.DRAFT,
+        answers: s.answers,
+        overallComment: s.overallComment,
+        submittedAt: null,
+      });
+      s.saved = true;
+      s.hydrated = true;
+      s.dirty = false;
+      setAutosaveStatus(`Đã lưu nháp lúc ${fmtSavedTime(Date.now())}`);
+    } catch (e) {
+      if (e && e.code === 'PERIOD_LOCKED') {
+        // Period closed mid-edit — stop auto-saving and tell the reviewer once.
+        setAutosaveStatus('Kỳ đánh giá đã đóng — không thể lưu.', 'var(--danger)');
+      } else {
+        // Keep s.dirty so the next edit (or page-leave flush) retries.
+        setAutosaveStatus('Chưa lưu được — sẽ thử lại.', 'var(--danger)');
+      }
+    } finally {
+      autosaveInFlight = false;
+    }
+  };
+
+  const scheduleAutosave = () => {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    if (s.saved || !s.dirty) return;
+    autosaveTimer = setTimeout(flushAutosave, AUTOSAVE_DELAY);
+  };
+
+  // Flush pending edits when the tab is hidden or the page is closing, so work
+  // typed within the debounce window isn't lost. Re-registered each render —
+  // remove the previous pair first to avoid stacking duplicates.
+  if (autosavePageListeners) {
+    document.removeEventListener('visibilitychange', autosavePageListeners.vis);
+    window.removeEventListener('beforeunload', autosavePageListeners.unload);
+  }
+  const onVisibility = () => { if (document.hidden) flushAutosave(); };
+  const onUnload = () => { flushAutosave(); };
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('beforeunload', onUnload);
+  autosavePageListeners = { vis: onVisibility, unload: onUnload };
+
   // rating buttons: hover preview updates the label in place; click re-renders
   container.querySelectorAll('.rating-btn').forEach(b => {
     const qid = b.dataset.qid;
@@ -335,6 +432,7 @@ function wire(container, emp, user, locked, s, qids) {
       s.answers[qid].score = +b.dataset.rate;
       s.saved = false;
       s.dirty = true;
+      scheduleAutosave();
       requestRender();
     });
   });
@@ -345,6 +443,7 @@ function wire(container, emp, user, locked, s, qids) {
       s.answers[t.dataset.comment].comment = t.value;
       s.saved = false;
       s.dirty = true;
+      scheduleAutosave();
     }));
   container.querySelectorAll('[data-add-comment]').forEach(b =>
     b.addEventListener('click', () => {
@@ -365,6 +464,7 @@ function wire(container, emp, user, locked, s, qids) {
     s.overallComment = overallTa.value;
     s.saved = false;
     s.dirty = true;
+    scheduleAutosave();
     const now = !!(s.overallComment && s.overallComment.trim());
     if (was !== now) {
       requestRender();
@@ -375,6 +475,8 @@ function wire(container, emp, user, locked, s, qids) {
 
   // ---- shared actions (bound to both desktop rail + mobile bottom bar) ----
   const doSave = async () => {
+    // Manual save supersedes any pending auto-save — cancel the debounce.
+    if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
     try {
       await saveReview(s.empId, s.reviewerId, {
         status: STATUS.DRAFT,
