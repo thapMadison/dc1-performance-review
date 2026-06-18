@@ -347,3 +347,59 @@ export function startCountdownTicker() {
   if (countdownTimer) return;
   countdownTimer = setInterval(tickCountdowns, MS.sec);
 }
+
+/* ═══════ Toast — transient top-right confirmation ═══════
+   Self-contained: lazily mounts a fixed container, slides a card in, then
+   auto-dismisses after `duration` ms. A manual ✕ closes it early. Stacks
+   multiple toasts top-to-bottom. */
+const TOAST_TONES = {
+  success: { accent: 'var(--ok)', bg: '#EAF7EF', border: '#BFE3CC', icon: 'check' },
+  error:   { accent: 'var(--danger)', bg: '#FCEDED', border: '#F3C9C9', icon: 'help' },
+  info:    { accent: 'var(--blue)', bg: '#EAF2FC', border: '#C7DBF5', icon: 'help' },
+};
+
+function toastContainer() {
+  let el = document.getElementById('toast-stack');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast-stack';
+    el.style.cssText =
+      'position:fixed;top:18px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:10px;pointer-events:none';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+export function toast(message, { type = 'success', duration = 3000 } = {}) {
+  const t = TOAST_TONES[type] || TOAST_TONES.success;
+  const card = document.createElement('div');
+  card.style.cssText =
+    `pointer-events:auto;display:flex;align-items:center;gap:11px;min-width:240px;max-width:380px;` +
+    `padding:13px 15px;background:${t.bg};border:1px solid ${t.border};border-radius:11px;` +
+    `box-shadow:0 8px 28px rgba(20,40,80,.14);font-size:14px;font-weight:600;color:var(--ink);` +
+    `transform:translateX(120%);opacity:0;transition:transform .28s cubic-bezier(.2,.8,.25,1),opacity .28s`;
+  card.innerHTML = `
+    <span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:${t.accent};display:flex;align-items:center;justify-content:center">
+      ${icon(t.icon, { size: 14, color: '#fff', stroke: 3 })}
+    </span>
+    <span style="flex:1;line-height:1.4">${esc(message)}</span>
+    <button data-toast-close aria-label="Đóng" style="flex-shrink:0;border:none;background:transparent;cursor:pointer;color:var(--faint);display:flex;padding:2px">
+      ${icon('x', { size: 15, stroke: 2.5 })}
+    </button>`;
+
+  toastContainer().appendChild(card);
+  // next frame → trigger the slide-in transition
+  requestAnimationFrame(() => { card.style.transform = 'translateX(0)'; card.style.opacity = '1'; });
+
+  let timer;
+  const dismiss = () => {
+    if (!card.isConnected) return;
+    clearTimeout(timer);
+    card.style.transform = 'translateX(120%)';
+    card.style.opacity = '0';
+    setTimeout(() => card.remove(), 300);
+  };
+  card.querySelector('[data-toast-close]').addEventListener('click', dismiss);
+  timer = setTimeout(dismiss, duration);
+  return dismiss;
+}

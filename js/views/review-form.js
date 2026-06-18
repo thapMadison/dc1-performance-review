@@ -5,7 +5,7 @@
    on "Lưu nháp" / "Nộp" (so typing never fights re-renders).
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS, reviewPeriodStatus, bandColor, wireCollapsibles } from '../ui.js';
+import { esc, icon, avatar, statusPill, ratingScale, progress, emptyState, openModal, btn, SCALE_LABELS, SCALE_COLORS, NOTCH, GROUP_COLORS, reviewPeriodStatus, bandColor, wireCollapsibles, toast } from '../ui.js';
 import { state, allQuestionIds, reviewOf, saveReview, classify } from '../store.js';
 import { nav } from '../router.js';
 import { requestRender } from '../bus.js';
@@ -109,8 +109,15 @@ function overallBandRowHtml(qids, s) {
 let session = null;
 
 function getSession(empId, reviewerId) {
-  if (session && session.empId === empId && session.reviewerId === reviewerId) return session;
   const existing = reviewOf(empId, reviewerId);
+  if (session && session.empId === empId && session.reviewerId === reviewerId) {
+    // Reuse the live session, EXCEPT when it was created before the reviewer's
+    // saved review arrived from the backend (the reviews/ node loads in a later
+    // phase, so on a fresh page load the session is first built empty). Once the
+    // data lands, rebuild from it — but only while the reviewer hasn't started
+    // editing, so we never clobber in-progress local edits.
+    if (session.hydrated || session.dirty || !existing) return session;
+  }
   const answers = {};
   const openComments = {};
   allQuestionIds().forEach(q => { answers[q] = { score: null, comment: '' }; });
@@ -123,7 +130,9 @@ function getSession(empId, reviewerId) {
     });
   }
   const overallComment = (existing && existing.overallComment) || '';
-  session = { empId, reviewerId, answers, openComments, overallComment, saved: false };
+  // hydrated = this session was built from real backend data (or there is
+  // genuinely none yet, in which case a later non-null `existing` will rebuild).
+  session = { empId, reviewerId, answers, openComments, overallComment, saved: false, dirty: false, hydrated: !!existing };
   return session;
 }
 export function clearReviewSession() { session = null; }
@@ -325,6 +334,7 @@ function wire(container, emp, user, locked, s, qids) {
     b.addEventListener('click', () => {
       s.answers[qid].score = +b.dataset.rate;
       s.saved = false;
+      s.dirty = true;
       requestRender();
     });
   });
@@ -334,10 +344,12 @@ function wire(container, emp, user, locked, s, qids) {
     t.addEventListener('input', () => {
       s.answers[t.dataset.comment].comment = t.value;
       s.saved = false;
+      s.dirty = true;
     }));
   container.querySelectorAll('[data-add-comment]').forEach(b =>
     b.addEventListener('click', () => {
       s.openComments[b.dataset.addComment] = true;
+      s.dirty = true;
       requestRender();
       const ta = document.querySelector(`[data-comment="${CSS.escape(b.dataset.addComment)}"]`);
       if (ta) ta.focus();
@@ -352,6 +364,7 @@ function wire(container, emp, user, locked, s, qids) {
     const was = !!(s.overallComment && s.overallComment.trim());
     s.overallComment = overallTa.value;
     s.saved = false;
+    s.dirty = true;
     const now = !!(s.overallComment && s.overallComment.trim());
     if (was !== now) {
       requestRender();
@@ -362,13 +375,25 @@ function wire(container, emp, user, locked, s, qids) {
 
   // ---- shared actions (bound to both desktop rail + mobile bottom bar) ----
   const doSave = async () => {
-    await saveReview(s.empId, s.reviewerId, {
-      status: STATUS.DRAFT,
-      answers: s.answers,
-      overallComment: s.overallComment,
-      submittedAt: null,
-    });
+    try {
+      await saveReview(s.empId, s.reviewerId, {
+        status: STATUS.DRAFT,
+        answers: s.answers,
+        overallComment: s.overallComment,
+        submittedAt: null,
+      });
+    } catch (e) {
+      toast(e && e.code === 'PERIOD_LOCKED'
+        ? (e.message || 'Kỳ đánh giá đã đóng hoặc chưa bắt đầu.')
+        : 'Không lưu được bản nháp. Vui lòng thử lại.', { type: 'error' });
+      return;
+    }
     s.saved = true;
+    // The saved review is now the source of truth; mark the session as
+    // hydrated so an incoming backend echo never rebuilds it from scratch.
+    s.hydrated = true;
+    s.dirty = false;
+    toast('Đã lưu bản nháp thành công.');
     requestRender();
     setTimeout(() => { if (session === s) { s.saved = false; requestRender(); } }, 2200);
   };
@@ -402,9 +427,17 @@ function wire(container, emp, user, locked, s, qids) {
     });
     m.body.querySelector('[data-cancel]').addEventListener('click', m.close);
     m.body.querySelector('[data-confirm]').addEventListener('click', async () => {
-      await saveReview(s.empId, s.reviewerId, { status: STATUS.SUBMITTED, answers: s.answers, overallComment: s.overallComment });
+      try {
+        await saveReview(s.empId, s.reviewerId, { status: STATUS.SUBMITTED, answers: s.answers, overallComment: s.overallComment });
+      } catch (e) {
+        toast(e && e.code === 'PERIOD_LOCKED'
+          ? (e.message || 'Kỳ đánh giá đã đóng hoặc chưa bắt đầu.')
+          : 'Không nộp được đánh giá. Vui lòng thử lại.', { type: 'error' });
+        return;
+      }
       m.close();
       clearReviewSession();
+      toast('Đã nộp đánh giá thành công.');
       nav('/myreviews');
     });
   };

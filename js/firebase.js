@@ -183,17 +183,29 @@ function unsubscribeAll() {
 
 /* ─────────── Denormalization helpers (write side) ─────────── */
 
-// An employee's dept; used to route writes to the per-dept mirrors. Reads
-// from the local employees cache when available, else from the DB.
-async function deptOf(empId) {
-  const snap = await get(ref(db, `${BASE}/employees/${empId}/dept`));
-  return (snap.val() || '').trim();
+// An employee's dept; used to route writes to the per-dept mirrors.
+// A reviewer cannot read /employees (manager-only), so when the canonical
+// node is unreadable we fall back to the dept carried on the reviewer's own
+// assignment entry (assignments/$reviewerId/$empId/dept), which they CAN read.
+async function deptOf(empId, reviewerId = null) {
+  try {
+    const snap = await get(ref(db, `${BASE}/employees/${empId}/dept`));
+    if (snap.exists()) return (snap.val() || '').trim();
+  } catch (_) { /* not a manager — fall through to the assignment mirror */ }
+  if (reviewerId) {
+    try {
+      const snap = await get(ref(db, `${BASE}/assignments/${reviewerId}/${empId}/dept`));
+      if (snap.exists()) return (snap.val() || '').trim();
+    } catch (_) { /* no readable source for dept */ }
+  }
+  return '';
 }
 
 // Minimal snapshot stored in assignments/$reviewerId/$empId so a reviewer
-// can see who they review without reading the employees node.
+// can see who they review (and route review writes to the dept mirror)
+// without reading the manager-only /employees node.
 function assignmentEntry(emp) {
-  return { empId: emp.id, name: emp.name || '', title: emp.title || '' };
+  return { empId: emp.id, name: emp.name || '', title: emp.title || '', dept: (emp.dept || '').trim() };
 }
 
 export const backend = {
@@ -239,7 +251,7 @@ export const backend = {
 
   // Reviewer (or manager) saves a review → mirror into reviewsByDept/$dept.
   async saveReview(empId, reviewerId, review) {
-    const dept = await deptOf(empId);
+    const dept = await deptOf(empId, reviewerId);
     const updates = { [`${BASE}/reviews/${empId}/${reviewerId}`]: review };
     if (dept) updates[`${BASE}/reviewsByDept/${dept}/${empId}/${reviewerId}`] = review;
     await update(ref(db), updates);
@@ -261,7 +273,7 @@ export const backend = {
     if (dept) updates[`${BASE}/employeesByDept/${dept}/${empId}/reviewerIds`] = reviewerIdsMap;
 
     // reverse index: add an entry under each current reviewer
-    const entry = assignmentEntry({ id: empId, name: emp.name, title: emp.title });
+    const entry = assignmentEntry({ id: empId, name: emp.name, title: emp.title, dept });
     reviewerIds.forEach(rid => { updates[`${BASE}/assignments/${rid}/${empId}`] = entry; });
 
     // dropped reviewers: clear their review, the dept mirror, and reverse index
