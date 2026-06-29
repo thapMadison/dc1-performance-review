@@ -114,6 +114,7 @@ async function reconcileRoleSubscriptions() {
   }
 
   // reviewer — needs an empId to read its assignments.
+  console.log('[DEBUG role] resolved role=', info.role, '| empId=', info.empId, '| currentEmail=', currentEmail); // TẠM — gỡ sau khi debug xong
   if (!info.empId) { roleSig = 'reviewer:none'; clearUnsubs(roleUnsubs); onDataCb('assignments', null); return; }
   const sig = `reviewer:${info.empId}`;
   // The assignment set can change; re-read on every shared tick for this
@@ -142,6 +143,7 @@ async function wireReviewerSubscriptions(empId, sig) {
     // which employees' reviews we must read.
     assignmentsUnsub = onValue(ref(db, `${BASE}/assignments/${empId}`), snap => {
       const val = snap.val() || {};
+      console.log('[DEBUG assignments] subscribe empId=', empId, '| received keys=', Object.keys(val), '| raw=', val); // TẠM — gỡ sau khi debug xong
       onDataCb('assignments', val);
       rewireReviewSubs(empId, Object.keys(val));
     }, err => console.error(`RTDB read failed for /${BASE}/assignments/${empId}:`, err));

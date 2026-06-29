@@ -5,7 +5,7 @@
    Fractional auto-averages are flagged so the Manager rounds them.
 ═══════════════════════════════════════════════════════════════ */
 
-import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS, reviewPeriodStatus, bandColor, bandBg, wireCollapsibles } from '../ui.js';
+import { esc, icon, avatar, statusPill, scoreChip, emptyState, openModal, btn, eyebrowMark, GROUP_COLORS, reviewPeriodStatus, bandColor, bandBg, wireCollapsibles, toast } from '../ui.js';
 import {
   state, reviewerIdsOf, avgForQuestion, finalForQuestion,
   isFractional, fractionalQuestionsOf,
@@ -557,8 +557,19 @@ function openAssignModal(emp) {
   m.body.querySelector('[data-q]').addEventListener('input', e => { q = e.target.value; paint(); });
   m.body.querySelector('[data-cancel]').addEventListener('click', m.close);
   m.body.querySelector('[data-save]').addEventListener('click', async () => {
-    await assignReviewers(emp.id, sel);
+    const saveBtn = m.body.querySelector('[data-save]');
+    saveBtn.disabled = true;
+    try {
+      await assignReviewers(emp.id, sel);
+    } catch (e) {
+      saveBtn.disabled = false;
+      toast(e && e.code === 'PERIOD_LOCKED'
+        ? (e.message || 'Kỳ đánh giá đã đóng hoặc chưa bắt đầu.')
+        : 'Không lưu được phân công. Vui lòng thử lại.', { type: 'error' });
+      return;
+    }
     m.close();
+    toast('Đã lưu phân công thành công.');
   });
 
   paint();
