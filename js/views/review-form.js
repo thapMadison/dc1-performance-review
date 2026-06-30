@@ -39,15 +39,18 @@ function avgChip(st, { big = false } = {}) {
 // optional comment box per question. Output matches the original inline map.
 function questionGroupHtml(g, gi, s, locked) {
   const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+  // Collapse state persists in the session so it survives the full re-render
+  // that scoring a question triggers (requestRender → renderReviewForm).
+  const collapsed = s.collapsed && s.collapsed.has(g.id);
   return `
       <div id="grp-${esc(g.id)}" class="card group-anchor" style="margin-bottom:26px;padding:0;overflow:hidden;border-left:3px solid ${color}">
         <button class="rf-group-toggle" data-rf-toggle="${esc(g.id)}" style="display:flex;align-items:center;gap:11px;padding:14px 20px;width:100%;border:none;border-bottom:1px solid var(--line);background:#FAFBFC;cursor:pointer;text-align:left;transition:background .14s">
           <div style="width:26px;height:26px;clip-path:${NOTCH(7)};background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${gi + 1}</div>
           <h2 style="font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;flex:1">${esc(g.name)}</h2>
           <span style="font-size:12px;font-weight:600;color:var(--faint);margin-right:8px">${g.items.length} câu</span>
-          <svg class="rf-chevron" data-rf-chevron="${esc(g.id)}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg class="rf-chevron" data-rf-chevron="${esc(g.id)}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s${collapsed ? ';transform:rotate(-90deg)' : ''}"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <div class="rf-group-body" data-rf-body="${esc(g.id)}" style="display:flex;flex-direction:column;gap:0">
+        <div class="rf-group-body${collapsed ? ' rf-group-body--collapsed' : ''}" data-rf-body="${esc(g.id)}" style="display:flex;flex-direction:column;gap:0">
           ${g.items.map((q, qi) => {
             const a = s.answers[q.id] || { score: null, comment: '' };
             const showC = s.openComments[q.id] || a.comment;
@@ -121,6 +124,10 @@ let autosavePageListeners = null;
 
 function getSession(empId, reviewerId) {
   const existing = reviewOf(empId, reviewerId);
+  // Collapse state is pure UI; carry it across a same-target rebuild (e.g. the
+  // backend echo after an auto-save) so a rebuild never springs groups open.
+  const prevCollapsed = (session && session.empId === empId && session.reviewerId === reviewerId)
+    ? session.collapsed : null;
   if (session && session.empId === empId && session.reviewerId === reviewerId) {
     // Reuse the live session, EXCEPT when it was created before the reviewer's
     // saved review arrived from the backend (the reviews/ node loads in a later
@@ -143,7 +150,7 @@ function getSession(empId, reviewerId) {
   const overallComment = (existing && existing.overallComment) || '';
   // hydrated = this session was built from real backend data (or there is
   // genuinely none yet, in which case a later non-null `existing` will rebuild).
-  session = { empId, reviewerId, answers, openComments, overallComment, saved: false, dirty: false, hydrated: !!existing };
+  session = { empId, reviewerId, answers, openComments, overallComment, collapsed: prevCollapsed || new Set(), saved: false, dirty: false, hydrated: !!existing };
   return session;
 }
 export function clearReviewSession() {
@@ -320,10 +327,16 @@ function wire(container, emp, user, locked, s, qids) {
     nav('/myreviews');
   });
 
-  // group collapse / expand
+  // group collapse / expand. Record the state in the session (s.collapsed) so a
+  // subsequent re-render (e.g. scoring a question) re-emits the collapsed groups
+  // as collapsed instead of springing them all back open.
   wireCollapsibles(container, {
     toggleAttr: 'data-rf-toggle', bodyAttr: 'data-rf-body', chevronAttr: 'data-rf-chevron',
     collapsedClass: 'rf-group-body--collapsed',
+    onToggle: (btn, collapsed) => {
+      const id = btn.getAttribute('data-rf-toggle');
+      if (collapsed) s.collapsed.add(id); else s.collapsed.delete(id);
+    },
   });
 
   // jump to a group anchor — auto-expand the group if it is collapsed
@@ -333,6 +346,7 @@ function wire(container, emp, user, locked, s, qids) {
     if (body && body.classList.contains('rf-group-body--collapsed')) {
       body.classList.remove('rf-group-body--collapsed');
       if (chevron) chevron.style.transform = '';
+      s.collapsed.delete(id);
     }
     const el = container.querySelector(`#grp-${CSS.escape(id)}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
