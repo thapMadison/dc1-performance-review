@@ -54,6 +54,7 @@ function subscribeShared() {
   COLLECTIONS_SHARED.forEach(key => {
     sharedUnsubs.push(onValue(ref(db, `${BASE}/${key}`), snap => {
       const val = snap.val();
+      console.log('[DEBUG shared] node=', key, '| received keys=', val ? Object.keys(val) : null); // TẠM — gỡ sau khi debug xong
       if (key in sharedSnap) sharedSnap[key] = val || {};
       onDataCb(key, val);
       // shared data changed → role/empId may now be resolvable
