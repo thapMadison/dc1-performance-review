@@ -68,9 +68,11 @@ function resolveRoleInfo() {
   const email = currentEmail.toLowerCase();
   const key = encodeEmailKey(email);
   if (sharedSnap.managers[key]) return { role: 'manager' };
-  const dept = typeof sharedSnap.leaders[key] === 'string' ? sharedSnap.leaders[key].trim() : null;
-  if (dept) return { role: 'leader', dept };
   const empId = sharedSnap.emailToEmpId[key] || null;
+  const dept = typeof sharedSnap.leaders[key] === 'string' ? sharedSnap.leaders[key].trim() : null;
+  // A leader may also be an employee with review assignments — carry empId so
+  // reconcileRoleSubscriptions can additionally wire their reviewer-side data.
+  if (dept) return { role: 'leader', dept, empId };
   return { role: 'reviewer', empId };
 }
 
