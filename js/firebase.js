@@ -54,7 +54,6 @@ function subscribeShared() {
   COLLECTIONS_SHARED.forEach(key => {
     sharedUnsubs.push(onValue(ref(db, `${BASE}/${key}`), snap => {
       const val = snap.val();
-      console.log('[DEBUG shared] node=', key, '| received keys=', val ? Object.keys(val) : null); // TẠM — gỡ sau khi debug xong
       if (key in sharedSnap) sharedSnap[key] = val || {};
       onDataCb(key, val);
       // shared data changed → role/empId may now be resolvable
@@ -115,10 +114,6 @@ async function reconcileRoleSubscriptions() {
   }
 
   // reviewer — needs an empId to read its assignments.
-  console.log('[DEBUG role] resolved role=', info.role, '| empId=', info.empId, '| currentEmail=', currentEmail,
-    '| encodedKey=', encodeEmailKey(currentEmail.toLowerCase()),
-    '| emailToEmpId loaded keys=', Object.keys(sharedSnap.emailToEmpId || {}),
-    '| lookup=', (sharedSnap.emailToEmpId || {})[encodeEmailKey(currentEmail.toLowerCase())]); // TẠM — gỡ sau khi debug xong
   if (!info.empId) { roleSig = 'reviewer:none'; clearUnsubs(roleUnsubs); onDataCb('assignments', null); return; }
   const sig = `reviewer:${info.empId}`;
   // The assignment set can change; re-read on every shared tick for this

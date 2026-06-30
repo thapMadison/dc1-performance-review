@@ -65,7 +65,6 @@ export async function initStore(b) {
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
       } else if (key === 'assignments') {
         // Reviewer reverse-index: { empId: { empId, name, title } }.
-        console.log('[DEBUG store] onData assignments | keys=', Object.keys(val || {}), '| val=', val); // TẠM — gỡ sau khi debug xong
         state.assignments = val || {};
         // Build a minimal employee roster so the reviewer's views
         // (my-reviews / review-form) can resolve names without the
