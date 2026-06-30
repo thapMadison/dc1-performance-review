@@ -12,7 +12,8 @@ export const state = {
   dataReady: false,
   groups: [],            // [{ id, name, items: [{ id, text, hint }] }]
   employees: [],         // [{ id, name, email, title, dept, order, reviewerIds: {empId:true} }]
-  reviews: {},           // { empId: { reviewerEmpId: { status, answers, updatedAt, submittedAt } } }
+  reviews: {},           // { empId: { reviewerEmpId: { status, answers, updatedAt, submittedAt } } }  — dept/full view (manager/leader)
+  myReviews: {},         // { empId: { myId: review } }  — the current user's OWN reviews of their assignees (reviewer/leader-reviewer)
   finals: {},            // { empId: { qid: { score, edited: true } } }  — manager overrides only
   groupWeights: {},      // { groupId: weightPercent }  — per-group weight, edited directly in DB
   bands: null,           // [{ id, label, min, max }]  — classification thresholds, edited in DB
@@ -47,7 +48,7 @@ export async function initStore(b) {
       state.authReady = true;
       if (!user) {
         state.dataReady = false;
-        state.groups = []; state.employees = []; state.reviews = {}; state.finals = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
+        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
       }
       notify();
     },
@@ -64,16 +65,11 @@ export async function initStore(b) {
           .map(([id, e]) => ({ id, dept: '', title: '', ...e, reviewerIds: e.reviewerIds || {} }))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
       } else if (key === 'assignments') {
-        // Reviewer reverse-index: { empId: { empId, name, title } }.
+        // Reviewer reverse-index: { empId: { empId, name, title, dept } }.
+        // We do NOT rebuild state.employees from this: a leader-reviewer keeps
+        // their department roster in state.employees, and assignedToMe() /
+        // review-form resolve assignee names straight from state.assignments.
         state.assignments = val || {};
-        // Build a minimal employee roster so the reviewer's views
-        // (my-reviews / review-form) can resolve names without the
-        // employees node. reviewerIds is left empty — assignment is
-        // authoritative for "who I review" via state.assignments.
-        state.employees = Object.values(state.assignments)
-          .filter(Boolean)
-          .map(a => ({ id: a.empId, name: a.name || '', title: a.title || '', dept: '', email: '', reviewerIds: {} }))
-          .sort((a, b) => a.name.localeCompare(b.name));
       } else {
         state[key] = val || {};
       }
@@ -121,21 +117,31 @@ export function allQuestionIds(groups = state.groups) {
 export function reviewerIdsOf(emp) { return Object.keys(emp.reviewerIds || {}); }
 
 // Employees the current user (by their empId) is assigned to review.
-// Reviewers get this from the `assignments` reverse-index (they can't read
-// the employees node); managers/leaders fall back to scanning employees'
-// reviewerIds (they have the full/dept roster loaded).
+// Reviewers AND leader-reviewers get this straight from the `assignments`
+// reverse-index — each entry already carries { empId, name, title, dept },
+// so we don't need them in state.employees (a leader's state.employees is
+// their department roster, which omits cross-dept assignees). Managers don't
+// load assignments, so they fall back to scanning the full roster's
+// reviewerIds.
 export function assignedToMe(myId) {
   if (!myId) return [];
-  const fromIndex = Object.keys(state.assignments || {}).length
-    ? Object.values(state.assignments).filter(Boolean).map(a => a.empId)
-    : null;
-  const ids = fromIndex || state.employees.filter(e => (e.reviewerIds || {})[myId]).map(e => e.id);
-  return ids
-    .map(id => state.employees.find(e => e.id === id))
-    .filter(Boolean);
+  const entries = Object.values(state.assignments || {}).filter(Boolean);
+  if (entries.length) {
+    return entries
+      .map(a => ({ id: a.empId, name: a.name || '', title: a.title || '', dept: a.dept || '', email: '', reviewerIds: {} }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return state.employees
+    .filter(e => (e.reviewerIds || {})[myId])
+    .map(e => ({ ...e }));
 }
 
+// The current user's review of `reviewerId` for `empId`. Reviewer/leader-reviewer
+// reads come from state.myReviews (their own assignment reviews); managers read
+// from the full state.reviews tree.
 export function reviewOf(empId, reviewerId) {
+  const mine = state.myReviews[empId] && state.myReviews[empId][reviewerId];
+  if (mine) return mine;
   return (state.reviews[empId] && state.reviews[empId][reviewerId]) || null;
 }
 

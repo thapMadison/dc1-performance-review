@@ -163,7 +163,12 @@ function fmtSavedTime(ts) {
 }
 
 export function renderReviewForm(container, user, empId) {
-  const emp = state.employees.find(e => e.id === empId);
+  // Prefer the loaded roster (manager full / leader dept), but fall back to
+  // the reviewer's own assignment entry — a reviewer (or a leader reviewing
+  // someone outside their dept) has no employees node, only state.assignments.
+  const a = state.assignments && state.assignments[empId];
+  const emp = state.employees.find(e => e.id === empId)
+    || (a ? { id: empId, name: a.name || '', title: a.title || '', dept: a.dept || '', email: '', reviewerIds: {} } : null);
   if (!emp) {
     container.innerHTML = `<div class="card">${emptyState({ icon: 'help', title: 'Không tìm thấy nhân viên', desc: 'Nhân viên này không còn trong danh sách.' })}</div>`;
     return;

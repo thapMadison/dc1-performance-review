@@ -122,7 +122,7 @@ function deriveAssignments(employees) {
   Object.entries(employees || {}).forEach(([id, e]) => {
     Object.keys(e.reviewerIds || {}).forEach(rid => {
       if (!out[rid]) out[rid] = {};
-      out[rid][id] = { empId: id, name: e.name || '', title: e.title || '' };
+      out[rid][id] = { empId: id, name: e.name || '', title: e.title || '', dept: (e.dept || '').trim() };
     });
   });
   return out;
@@ -184,11 +184,19 @@ function emitAll() {
     handlers.onData('employees', clone(emps));
     handlers.onData('reviews', clone(revs));
     handlers.onData('finals', clone(fins));
+    // A leader may also be an employee with review assignments — emit their
+    // reviewer-side data on top of the dept view (separate state slices).
+    emitAssignmentSide(emailToEmpId[key] || null);
     return;
   }
 
   // reviewer — assignments + only their own reviews of assigned employees
-  const myId = emailToEmpId[key] || null;
+  emitAssignmentSide(emailToEmpId[key] || null);
+}
+
+// Emit the current user's reviewer-side slices: their assignment reverse-index
+// and their own reviews of each assignee (state.assignments / state.myReviews).
+function emitAssignmentSide(myId) {
   const assignments = myId ? (deriveAssignments(data.employees)[myId] || {}) : {};
   handlers.onData('assignments', clone(assignments));
   const myReviews = {};
@@ -196,7 +204,7 @@ function emitAll() {
     const r = data.reviews[empId] && data.reviews[empId][myId];
     if (r) myReviews[empId] = { [myId]: r };
   });
-  handlers.onData('reviews', clone(myReviews));
+  handlers.onData('myReviews', clone(myReviews));
 }
 function mutate(fn) { fn(data); persist(); emitAll(); }
 

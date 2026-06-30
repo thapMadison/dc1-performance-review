@@ -94,10 +94,15 @@ async function reconcileRoleSubscriptions() {
   }
 
   if (info.role === 'leader') {
-    const sig = `leader:${info.dept}`;
+    // A leader may ALSO be an employee with review assignments (e.g. a dept
+    // lead who cross-reviews people in other depts). empId is part of the sig
+    // so that when emailToEmpId resolves late we re-wire to pick up their
+    // assignment-side data on top of the dept view.
+    const sig = `leader:${info.dept}:${info.empId || 'none'}`;
     if (sig === roleSig) return;
     roleSig = sig;
     clearUnsubs(roleUnsubs);
+    clearAssignmentSubs();
     // Leaders read the per-dept mirrors; map them back onto the canonical
     // state keys (employees/reviews/finals) so the views are role-agnostic.
     const map = {
@@ -110,48 +115,53 @@ async function reconcileRoleSubscriptions() {
         snap => onDataCb(map[key], snap.val()),
         err => console.error(`RTDB read failed for /${BASE}/${key}/${info.dept}:`, err)));
     });
+    // Additive: load the leader's own assignments + own reviews so the
+    // "Đánh giá của tôi" page works for them too (state.assignments /
+    // state.myReviews stay separate from the dept slices above).
+    if (info.empId) wireAssignmentSubs(info.empId);
     return;
   }
 
   // reviewer — needs an empId to read its assignments.
-  if (!info.empId) { roleSig = 'reviewer:none'; clearUnsubs(roleUnsubs); onDataCb('assignments', null); return; }
+  if (!info.empId) { roleSig = 'reviewer:none'; clearUnsubs(roleUnsubs); clearAssignmentSubs(); onDataCb('assignments', null); return; }
   const sig = `reviewer:${info.empId}`;
-  // The assignment set can change; re-read on every shared tick for this
-  // reviewer (cheap — single shallow node) and re-wire review subs if so.
-  await wireReviewerSubscriptions(info.empId, sig);
+  if (sig === roleSig) return;
+  roleSig = sig;
+  clearUnsubs(roleUnsubs);
+  wireAssignmentSubs(info.empId);
 }
 
-// Keep track of which (empId) review paths the reviewer is currently
-// subscribed to, so we only re-subscribe when the assignment set changes.
-let reviewerEmpId = null;
+// Keep track of which (empId) review paths we're currently subscribed to, so
+// we only re-subscribe when the assignment set changes.
 let reviewerAssignedIds = '';
 let assignmentsUnsub = null;
 let reviewSubs = [];
 
-async function wireReviewerSubscriptions(empId, sig) {
-  if (sig !== roleSig) {
-    // role identity changed (e.g. first resolve or empId changed) → reset
-    roleSig = sig;
-    reviewerEmpId = empId;
-    clearUnsubs(roleUnsubs);
-    if (assignmentsUnsub) { assignmentsUnsub(); assignmentsUnsub = null; }
-    clearUnsubs(reviewSubs);
-    reviewerAssignedIds = '';
-
-    // Subscribe the reviewer's own assignment list. Each change re-derives
-    // which employees' reviews we must read.
-    assignmentsUnsub = onValue(ref(db, `${BASE}/assignments/${empId}`), snap => {
-      const val = snap.val() || {};
-      console.log('[DEBUG assignments] subscribe empId=', empId, '| received keys=', Object.keys(val), '| raw=', val); // TẠM — gỡ sau khi debug xong
-      onDataCb('assignments', val);
-      rewireReviewSubs(empId, Object.keys(val));
-    }, err => console.error(`RTDB read failed for /${BASE}/assignments/${empId}:`, err));
-    roleUnsubs.push(() => { if (assignmentsUnsub) { assignmentsUnsub(); assignmentsUnsub = null; } });
-  }
+function clearAssignmentSubs() {
+  if (assignmentsUnsub) { assignmentsUnsub(); assignmentsUnsub = null; }
+  clearUnsubs(reviewSubs);
+  reviewerAssignedIds = '';
 }
 
-// Subscribe reviews/$empId/$myId for each assigned employee. Rebuilds the
-// nested state.reviews map as { empId: { myId: review } }.
+// Subscribe the current user's own assignment list (reverse-index) + their own
+// review of each assignee. Used by both reviewers and leader-reviewers. The
+// caller has already set roleSig and cleared roleUnsubs; the assignment unsub
+// is registered in roleUnsubs so it's torn down on the next role change.
+function wireAssignmentSubs(empId) {
+  clearAssignmentSubs();
+
+  // Each change to the assignment list re-derives which reviews we must read.
+  assignmentsUnsub = onValue(ref(db, `${BASE}/assignments/${empId}`), snap => {
+    const val = snap.val() || {};
+    onDataCb('assignments', val);
+    rewireReviewSubs(empId, Object.keys(val));
+  }, err => console.error(`RTDB read failed for /${BASE}/assignments/${empId}:`, err));
+  roleUnsubs.push(() => clearAssignmentSubs());
+}
+
+// Subscribe reviews/$empId/$myId for each assigned employee. Builds the
+// current user's own-review map state.myReviews as { empId: { myId: review } }
+// (kept separate from the dept/full state.reviews tree).
 function rewireReviewSubs(myId, assignedEmpIds) {
   const sigIds = assignedEmpIds.slice().sort().join(',');
   if (sigIds === reviewerAssignedIds) return;
@@ -159,14 +169,14 @@ function rewireReviewSubs(myId, assignedEmpIds) {
   clearUnsubs(reviewSubs);
 
   const collected = {};
-  if (assignedEmpIds.length === 0) { onDataCb('reviews', {}); return; }
+  if (assignedEmpIds.length === 0) { onDataCb('myReviews', {}); return; }
   assignedEmpIds.forEach(empId => {
     reviewSubs.push(onValue(ref(db, `${BASE}/reviews/${empId}/${myId}`), snap => {
       const r = snap.val();
       if (r) collected[empId] = { [myId]: r };
       else delete collected[empId];
-      // emit a fresh shallow copy so the store replaces state.reviews
-      onDataCb('reviews', { ...collected });
+      // emit a fresh shallow copy so the store replaces state.myReviews
+      onDataCb('myReviews', { ...collected });
     }, err => console.error(`RTDB read failed for /${BASE}/reviews/${empId}/${myId}:`, err)));
   });
 }
@@ -174,11 +184,8 @@ function rewireReviewSubs(myId, assignedEmpIds) {
 function unsubscribeAll() {
   clearUnsubs(sharedUnsubs);
   clearUnsubs(roleUnsubs);
-  clearUnsubs(reviewSubs);
-  if (assignmentsUnsub) { assignmentsUnsub(); assignmentsUnsub = null; }
+  clearAssignmentSubs();
   roleSig = null;
-  reviewerEmpId = null;
-  reviewerAssignedIds = '';
   sharedSnap.managers = {}; sharedSnap.leaders = {}; sharedSnap.emailToEmpId = {};
 }
 
