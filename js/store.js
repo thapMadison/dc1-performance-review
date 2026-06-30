@@ -333,22 +333,28 @@ export function importEmployees(list) {
   return backend.importEmployees(list);
 }
 
-// Manager-only, run once after data loads: stamp reviewerName onto existing
-// reviews that lack it, so leaders can display cross-dept reviewers' names.
-// Gathers missing entries from the (full) manager state and delegates the
-// write to the backend. No-op when nothing is missing.
-let reviewerNameBackfillDone = false;
+// Manager-only: stamp reviewerName onto existing reviews that lack it, so
+// leaders can display cross-dept reviewers' names. Safe to call on every
+// manager render — the manager's nodes (employees/reviews) load asynchronously,
+// so this re-runs until the data is present, then naturally goes quiet:
+//   - skips until the employee roster is loaded;
+//   - only writes entries that are missing reviewerName AND haven't been
+//     written yet this session (backfillAttempted), avoiding a write storm
+//     while we wait for the write to echo back into state.
+const backfillAttempted = new Set();
 export function backfillReviewerNames() {
-  if (reviewerNameBackfillDone || !backend.backfillReviewerNames) return;
-  reviewerNameBackfillDone = true;
+  if (!backend.backfillReviewerNames) return;
+  if (!state.employees.length) return;                       // roster not loaded yet
   const byId = new Map(state.employees.map(e => [e.id, e]));
   const entries = [];
   Object.entries(state.reviews || {}).forEach(([empId, byReviewer]) => {
     const dept = (byId.get(empId) || {}).dept || '';
     Object.entries(byReviewer || {}).forEach(([reviewerId, review]) => {
       if (!review || review.reviewerName) return;            // already has a name
+      const k = `${empId}/${reviewerId}`;
+      if (backfillAttempted.has(k)) return;                  // write already issued, awaiting echo
       const name = (byId.get(reviewerId) || {}).name;
-      if (name) entries.push({ empId, dept, reviewerId, name });
+      if (name) { backfillAttempted.add(k); entries.push({ empId, dept, reviewerId, name }); }
     });
   });
   if (entries.length) Promise.resolve(backend.backfillReviewerNames(entries)).catch(() => {});
