@@ -147,6 +147,19 @@ function persist() {
 }
 function clone(v) { return JSON.parse(JSON.stringify(v ?? null)); }
 
+// Stamp reviewerName onto each review (mirrors production, where saveReview +
+// the manager backfill embed the reviewer's name into reviews/reviewsByDept so
+// leaders can show cross-dept reviewers' names). Returns a fresh clone.
+function withReviewerNames(reviewsMap) {
+  const out = clone(reviewsMap) || {};
+  Object.entries(out).forEach(([, byReviewer]) => {
+    Object.entries(byReviewer || {}).forEach(([rid, review]) => {
+      if (review && !review.reviewerName) review.reviewerName = (data.employees[rid] || {}).name || '';
+    });
+  });
+  return out;
+}
+
 // Emit the same per-role view the real backend (RBAC rules + role-scoped
 // subscriptions) would expose, so demo mode faithfully reproduces what each
 // role can and cannot see.
@@ -166,7 +179,7 @@ function emitAll() {
 
   if (isManager) {
     handlers.onData('employees', clone(data.employees));
-    handlers.onData('reviews', clone(data.reviews));
+    handlers.onData('reviews', withReviewerNames(data.reviews));
     handlers.onData('finals', clone(data.finals));
     return;
   }
@@ -182,7 +195,7 @@ function emitAll() {
       }
     });
     handlers.onData('employees', clone(emps));
-    handlers.onData('reviews', clone(revs));
+    handlers.onData('reviews', withReviewerNames(revs));
     handlers.onData('finals', clone(fins));
     // A leader may also be an employee with review assignments — emit their
     // reviewer-side data on top of the dept view (separate state slices).

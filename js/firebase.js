@@ -296,6 +296,21 @@ export const backend = {
     await update(ref(db), updates);
   },
 
+  // Manager-only backfill: stamp reviewerName onto existing reviews that lack
+  // it, in BOTH the canonical node and the per-dept mirror, so leaders can
+  // display cross-dept reviewers' names. entries: [{ empId, dept, reviewerId, name }].
+  // Idempotent — callers pass only the reviews still missing a name.
+  async backfillReviewerNames(entries) {
+    if (!entries || !entries.length) return;
+    const updates = {};
+    entries.forEach(({ empId, dept, reviewerId, name }) => {
+      if (!name) return;
+      updates[`${BASE}/reviews/${empId}/${reviewerId}/reviewerName`] = name;
+      if (dept) updates[`${BASE}/reviewsByDept/${dept}/${empId}/${reviewerId}/reviewerName`] = name;
+    });
+    if (Object.keys(updates).length) await update(ref(db), updates);
+  },
+
   async setFinal(empId, qid, score) {
     const dept = await deptOf(empId);
     const val = { score, edited: true };

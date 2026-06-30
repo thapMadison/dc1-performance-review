@@ -276,6 +276,10 @@ export function saveReview(empId, reviewerId, { status, answers, overallComment,
     status,
     answers: sanitizeAnswers(answers),
     overallComment: oc,
+    // Stamp the reviewer's display name so a leader (who can't read the
+    // employees node) can still show WHO reviewed their dept member — even
+    // when the reviewer is from another department. See assignedToMe note.
+    reviewerName: (state.authUser && state.authUser.name) || '',
     updatedAt: Date.now(),
     submittedAt: status === STATUS.SUBMITTED ? Date.now() : (submittedAt || null),
   });
@@ -327,4 +331,25 @@ export function importQuestions(groups) {
 export function importEmployees(list) {
   if (!isManagerEditAllowed()) return periodLockedError();
   return backend.importEmployees(list);
+}
+
+// Manager-only, run once after data loads: stamp reviewerName onto existing
+// reviews that lack it, so leaders can display cross-dept reviewers' names.
+// Gathers missing entries from the (full) manager state and delegates the
+// write to the backend. No-op when nothing is missing.
+let reviewerNameBackfillDone = false;
+export function backfillReviewerNames() {
+  if (reviewerNameBackfillDone || !backend.backfillReviewerNames) return;
+  reviewerNameBackfillDone = true;
+  const byId = new Map(state.employees.map(e => [e.id, e]));
+  const entries = [];
+  Object.entries(state.reviews || {}).forEach(([empId, byReviewer]) => {
+    const dept = (byId.get(empId) || {}).dept || '';
+    Object.entries(byReviewer || {}).forEach(([reviewerId, review]) => {
+      if (!review || review.reviewerName) return;            // already has a name
+      const name = (byId.get(reviewerId) || {}).name;
+      if (name) entries.push({ empId, dept, reviewerId, name });
+    });
+  });
+  if (entries.length) Promise.resolve(backend.backfillReviewerNames(entries)).catch(() => {});
 }

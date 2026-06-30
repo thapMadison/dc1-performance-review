@@ -41,7 +41,15 @@ export function renderEmployeeDetail(container, empId, user) {
   }
 
   const empReviews = state.reviews[empId] || {};
-  const assigned = reviewerIdsOf(emp).map(id => state.employees.find(e => e.id === id)).filter(Boolean);
+  // Resolve each reviewer's display info. A leader's state.employees holds only
+  // their own dept, so cross-dept reviewers aren't there — fall back to the
+  // name stamped on the review itself (reviewerName), then a neutral label.
+  const resolveReviewer = (id) => state.employees.find(e => e.id === id)
+    || { id, name: (empReviews[id] && empReviews[id].reviewerName) || 'Reviewer', title: '', dept: '' };
+  // Union of assigned ids and anyone who actually submitted a review, so a
+  // submitted reviewer always shows even if the dept mirror's reviewerIds lags.
+  const reviewerIds = [...new Set([...reviewerIdsOf(emp), ...Object.keys(empReviews)])];
+  const assigned = reviewerIds.map(resolveReviewer);
   const submitted = assigned.filter(u => empReviews[u.id] && empReviews[u.id].status === STATUS.SUBMITTED);
   const overrides = state.finals[empId] || {};
   const final = weightedFinal(empId);

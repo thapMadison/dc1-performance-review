@@ -3,8 +3,9 @@
    wire auth + store + router, render the current screen.
 ═══════════════════════════════════════════════════════════════ */
 
-import { state, subscribe, initStore } from './store.js';
+import { state, subscribe, initStore, backfillReviewerNames } from './store.js';
 import { resolveUser } from './auth.js';
+import { ROLE } from './constants.js';
 import { resolveRoute } from './router.js';
 import { setRenderer } from './bus.js';
 import { esc, startCountdownTicker } from './ui.js';
@@ -42,6 +43,10 @@ function render() {
     return;
   }
   if (!state.dataReady) { root.innerHTML = splash('Đang tải dữ liệu…'); return; }
+
+  // One-time, manager-only: backfill reviewerName onto existing reviews so
+  // leaders can show cross-dept reviewers' names (idempotent, self-guarded).
+  if (user.role === ROLE.MANAGER) backfillReviewerNames();
 
   const route = resolveRoute(user);
   const routeKey = `${route.page}:${route.param || ''}`;
