@@ -114,7 +114,10 @@ async function reconcileRoleSubscriptions() {
   }
 
   // reviewer — needs an empId to read its assignments.
-  console.log('[DEBUG role] resolved role=', info.role, '| empId=', info.empId, '| currentEmail=', currentEmail); // TẠM — gỡ sau khi debug xong
+  console.log('[DEBUG role] resolved role=', info.role, '| empId=', info.empId, '| currentEmail=', currentEmail,
+    '| encodedKey=', encodeEmailKey(currentEmail.toLowerCase()),
+    '| emailToEmpId loaded keys=', Object.keys(sharedSnap.emailToEmpId || {}),
+    '| lookup=', (sharedSnap.emailToEmpId || {})[encodeEmailKey(currentEmail.toLowerCase())]); // TẠM — gỡ sau khi debug xong
   if (!info.empId) { roleSig = 'reviewer:none'; clearUnsubs(roleUnsubs); onDataCb('assignments', null); return; }
   const sig = `reviewer:${info.empId}`;
   // The assignment set can change; re-read on every shared tick for this
