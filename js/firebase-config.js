@@ -25,8 +25,8 @@ export const RECAPTCHA_SITE_KEY = '6LfwAfMsAAAAALaOyFaWAgofFAjLJEOYkM8BwLwz';
 // Labels shown across the app
 export const APP_CYCLE = 'S1 2026';
 export const APP_CYCLE_YEAR = '2026';
-export const APP_DEADLINE = '06/07/2026';            // display string (DD/MM/YYYY)
-export const APP_DEADLINE_ISO = '2026-07-06T23:59:59'; // parseable; end of the deadline day
+export const APP_DEADLINE = '07/07/2026';            // display string (DD/MM/YYYY)
+export const APP_DEADLINE_ISO = '2026-07-07T23:59:59'; // parseable; end of the deadline day
 
 // Start of the review period. Before this moment the whole app is
 // read-only (view-only) for everyone. Leave null to disable the
