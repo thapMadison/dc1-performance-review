@@ -473,6 +473,7 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
     text-transform: uppercase; min-width: 86px;
   }
   .emp-row .emp-cell-progress { justify-self: end; align-self: start; grid-row: 1; grid-column: 2; }
+  .emp-row .emp-cell-pas { grid-column: 1 / -1; justify-content: flex-start !important; }
 
   /* my-reviews row: name on top, progress + status wrap below */
   .myreview-row { flex-wrap: wrap; gap: 12px 14px !important; padding: 16px !important; }

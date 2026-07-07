@@ -6,7 +6,8 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { esc, icon, openModal, btn } from '../ui.js';
-import { importQuestions, importEmployees } from '../store.js';
+import { importQuestions, importEmployees, setEmployeeAssessmentIds, state } from '../store.js';
+import { encodeEmailKey } from '../auth.js';
 
 const SAMPLE_QUESTIONS = [
   ['ID (tùy chọn)', 'Nhóm', 'Câu hỏi', 'Gợi ý'],
@@ -17,18 +18,29 @@ const SAMPLE_QUESTIONS = [
   ['TĐ01', 'Thái độ & Văn hóa', 'Tinh thần trách nhiệm', 'Chịu trách nhiệm với công việc của bản thân.'],
 ];
 const SAMPLE_EMPLOYEES = [
-  ['Tên', 'Email', 'Vị trí', 'Phòng ban', 'Email Reviewer (cách nhau dấu ;)'],
-  ['Trần Văn Sơn', 'son@madison.tech', 'Mobile Engineer', 'Engineering', 'trang@madison.tech'],
-  ['Lý Thu Trang', 'trang@madison.tech', 'UX Researcher', 'Product', 'khoa@madison.tech'],
-  ['Phan Đình Khoa', 'khoa@madison.tech', 'DevOps Engineer', 'Engineering', 'son@madison.tech;trang@madison.tech'],
+  ['Tên', 'Email', 'Vị trí', 'Phòng ban', 'Email Reviewer (cách nhau dấu ;)', 'Assessment ID (tùy chọn)'],
+  ['Trần Văn Sơn', 'son@madison.tech', 'Mobile Engineer', 'Engineering', 'trang@madison.tech', ''],
+  ['Lý Thu Trang', 'trang@madison.tech', 'UX Researcher', 'Product', 'khoa@madison.tech', ''],
+  ['Phan Đình Khoa', 'khoa@madison.tech', 'DevOps Engineer', 'Engineering', 'son@madison.tech;trang@madison.tech', ''],
+];
+const SAMPLE_ASSESSMENT_IDS = [
+  ['Email', 'Assessment ID'],
+  ['kiet@madison.tech', 'cec59517-45be-4151-aa77-bdd8f23ef13e'],
+  ['ha@madison.tech', 'a1b2c3d4-0000-0000-0000-000000000000'],
 ];
 
 function downloadTemplate(kind) {
-  const rows = kind === 'questions' ? SAMPLE_QUESTIONS : SAMPLE_EMPLOYEES;
+  const rows = kind === 'questions' ? SAMPLE_QUESTIONS
+    : kind === 'assessmentIds' ? SAMPLE_ASSESSMENT_IDS
+    : SAMPLE_EMPLOYEES;
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, kind === 'questions' ? 'Câu hỏi' : 'Nhân viên');
-  XLSX.writeFile(wb, kind === 'questions' ? 'mau_cau_hoi.xlsx' : 'mau_nhan_vien.xlsx');
+  const sheet = kind === 'questions' ? 'Câu hỏi' : kind === 'assessmentIds' ? 'Assessment ID' : 'Nhân viên';
+  XLSX.utils.book_append_sheet(wb, ws, sheet);
+  const file = kind === 'questions' ? 'mau_cau_hoi.xlsx'
+    : kind === 'assessmentIds' ? 'mau_assessment_id.xlsx'
+    : 'mau_nhan_vien.xlsx';
+  XLSX.writeFile(wb, file);
 }
 
 function parseRows(rows, kind) {
@@ -41,12 +53,24 @@ function parseRows(rows, kind) {
       hint: String(r[3] || '').trim(),
     })).filter(r => r.group && r.text);
   }
+  if (kind === 'assessmentIds') {
+    // Email → Assessment ID. Matched against the CURRENT employee list at
+    // preview/confirm time; only merges the assessmentId field.
+    const byEmail = new Map(state.employees.map(e => [e.email.toLowerCase(), e]));
+    return body.map(r => {
+      const email = String(r[0] || '').trim();
+      const assessmentId = String(r[1] || '').trim();
+      const emp = byEmail.get(email.toLowerCase());
+      return { email, assessmentId, emp: emp || null };
+    }).filter(r => r.email && r.assessmentId);
+  }
   return body.map(r => ({
     name: String(r[0] || '').trim(),
     email: String(r[1] || '').trim(),
     title: String(r[2] || '').trim(),
     dept: String(r[3] || '').trim(),
     reviewers: String(r[4] || '').split(/[;,]/).map(s => s.trim()).filter(Boolean),
+    assessmentId: String(r[5] || '').trim(),
   })).filter(r => r.name && r.email);
 }
 
@@ -57,12 +81,18 @@ export function openImportModal(kind) {
 
   const cols = kind === 'questions'
     ? ['ID', 'Nhóm', 'Câu hỏi', 'Gợi ý']
+    : kind === 'assessmentIds'
+    ? ['Email', 'Nhân viên', 'Assessment ID']
     : ['Tên', 'Email', 'Vị trí', 'Phòng ban', 'Reviewer'];
 
   const m = openModal({
-    title: kind === 'questions' ? 'Import bộ câu hỏi' : 'Import danh sách nhân viên',
+    title: kind === 'questions' ? 'Import bộ câu hỏi'
+      : kind === 'assessmentIds' ? 'Import Assessment ID'
+      : 'Import danh sách nhân viên',
     subtitle: kind === 'questions'
       ? 'Tải lên file Excel chứa các câu hỏi đánh giá theo nhóm.'
+      : kind === 'assessmentIds'
+      ? 'Ghép Assessment ID (từ PAS) vào nhân viên theo email. Dữ liệu khác giữ nguyên.'
       : 'Tải lên file Excel chứa nhân viên và reviewer tương ứng.',
     width: 680,
     contentHtml: '',
@@ -90,6 +120,16 @@ export function openImportModal(kind) {
   }
 
   function confirmImport() {
+    if (kind === 'assessmentIds') {
+      // Merge-only: never replaces the roster. Only rows matching an existing
+      // employee are written (unmatched are already dropped in preview).
+      const entries = rows
+        .filter(r => r.emp)
+        .map(r => ({ empId: r.emp.id, dept: (r.emp.dept || '').trim(), assessmentId: r.assessmentId }));
+      setEmployeeAssessmentIds(entries);
+      m.close();
+      return;
+    }
     if (kind === 'questions') {
       const map = {};
       const order = [];
@@ -113,6 +153,7 @@ export function openImportModal(kind) {
         name: r.name, email: r.email, title: r.title || '—', dept: r.dept || '',
         order: i,
         reviewers: r.reviewers,
+        ...(r.assessmentId ? { assessmentId: r.assessmentId } : {}),
       }));
       const emailToId = {};
       list.forEach(e => { const k = e.email.toLowerCase(); if (!emailToId[k]) emailToId[k] = e.id; });
@@ -156,11 +197,17 @@ export function openImportModal(kind) {
     const emailToName = {};
     if (kind === 'employees') rows.forEach(r => { const k = r.email.toLowerCase(); if (!emailToName[k]) emailToName[k] = r.name; });
 
+    // assessmentId import: how many rows actually matched an existing employee
+    const matched = kind === 'assessmentIds' ? rows.filter(r => r.emp).length : rows.length;
+
+    const noun = kind === 'questions' ? 'câu hỏi' : kind === 'assessmentIds' ? 'dòng' : 'nhân viên';
+    const canConfirm = kind === 'assessmentIds' ? matched > 0 : true;
+
     return `
       <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;background:var(--ok-bg);border-radius:9px;margin-bottom:16px">
         ${icon('check', { size: 18, color: 'var(--ok)', stroke: 3 })}
         <div style="flex:1">
-          <div style="font-size:14px;font-weight:700;color:#147A50">Đọc thành công ${rows.length} ${kind === 'questions' ? 'câu hỏi' : 'nhân viên'}</div>
+          <div style="font-size:14px;font-weight:700;color:#147A50">Đọc thành công ${rows.length} ${noun}${kind === 'assessmentIds' ? ` · khớp ${matched}` : ''}</div>
           <div style="font-size:12.5px;color:#2E9E6E;display:flex;align-items:center;gap:5px">${icon('file', { size: 12, color: '#2E9E6E' })}${esc(fileName)}</div>
         </div>
         <button class="text-underline-btn" data-reset>Chọn lại</button>
@@ -181,6 +228,12 @@ export function openImportModal(kind) {
                   <td style="padding:10px 12px;font-weight:600;color:var(--ink)">${esc(r.group)}</td>
                   <td style="padding:10px 12px;color:var(--ink)">${esc(r.text)}</td>
                   <td style="padding:10px 12px;color:var(--sub);font-size:12.5px">${r.hint ? esc(r.hint) : '—'}</td>
+                ` : kind === 'assessmentIds' ? `
+                  <td style="padding:10px 12px;color:var(--sub)">${esc(r.email)}</td>
+                  <td style="padding:10px 12px;font-weight:600">${r.emp
+                    ? `<span style="color:var(--ink)">${esc(r.emp.name)}</span>`
+                    : `<span style="color:var(--danger)">Không khớp — sẽ bỏ qua</span>`}</td>
+                  <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:${r.emp ? 'var(--ink)' : 'var(--faint)'}">${esc(r.assessmentId)}</td>
                 ` : `
                   <td style="padding:10px 12px;font-weight:600;color:var(--ink)">${esc(r.name)}</td>
                   <td style="padding:10px 12px;color:var(--sub)">${esc(r.email)}</td>
@@ -199,11 +252,14 @@ export function openImportModal(kind) {
       </div>
 
       <div style="display:flex;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap">
-        <div style="flex:1;min-width:180px;font-size:12.5px;color:var(--warn);display:flex;align-items:center;gap:6px">
-          ${icon('help', { size: 14, color: 'var(--warn)' })} Import sẽ thay thế toàn bộ ${kind === 'questions' ? 'bộ câu hỏi' : 'danh sách nhân viên'} hiện tại.
+        <div style="flex:1;min-width:180px;font-size:12.5px;color:${kind === 'assessmentIds' ? 'var(--sub)' : 'var(--warn)'};display:flex;align-items:center;gap:6px">
+          ${icon(kind === 'assessmentIds' ? 'check' : 'help', { size: 14, color: kind === 'assessmentIds' ? 'var(--ok)' : 'var(--warn)' })}
+          ${kind === 'assessmentIds'
+            ? 'Chỉ cập nhật Assessment ID cho nhân viên khớp email — dữ liệu khác giữ nguyên.'
+            : `Import sẽ thay thế toàn bộ ${kind === 'questions' ? 'bộ câu hỏi' : 'danh sách nhân viên'} hiện tại.`}
         </div>
         ${btn({ label: 'Huỷ', variant: 'soft', attrs: 'data-reset' })}
-        ${btn({ label: `Import ${rows.length} dòng`, variant: 'primary', icon: 'check', attrs: 'data-confirm' })}
+        ${btn({ label: kind === 'assessmentIds' ? `Cập nhật ${matched} nhân viên` : `Import ${rows.length} dòng`, variant: 'primary', icon: 'check', disabled: !canConfirm, attrs: 'data-confirm' })}
       </div>`;
   }
 
@@ -224,7 +280,10 @@ export function openImportModal(kind) {
       fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
       m.body.querySelector('[data-template]').addEventListener('click', () => downloadTemplate(kind));
       m.body.querySelector('[data-sample]').addEventListener('click', () => {
-        rows = parseRows(kind === 'questions' ? SAMPLE_QUESTIONS : SAMPLE_EMPLOYEES, kind);
+        const sample = kind === 'questions' ? SAMPLE_QUESTIONS
+          : kind === 'assessmentIds' ? SAMPLE_ASSESSMENT_IDS
+          : SAMPLE_EMPLOYEES;
+        rows = parseRows(sample, kind);
         fileName = 'Dữ liệu mẫu';
         err = '';
         paint();

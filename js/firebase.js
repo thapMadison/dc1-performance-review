@@ -331,6 +331,33 @@ export const backend = {
     await update(ref(db), updates);
   },
 
+  // Manager's final comment (sent to PAS). Manager-only top-level node, no
+  // per-dept mirror (leaders don't need it). null clears the entry.
+  setFinalComment(empId, val) {
+    return set(ref(db, `${BASE}/finalComments/${empId}`), val);
+  },
+
+  // Merge Assessment IDs onto existing employees. A single multi-path update
+  // whose paths are EXCLUSIVELY employees/$empId/assessmentId (+ the dept
+  // mirror) — nothing else is written, so reviews/finals/assignments are
+  // untouched. entries: [{ empId, dept, assessmentId }].
+  async setAssessmentIds(entries) {
+    const updates = {};
+    for (const e of entries) {
+      // Prefer the dept carried in the entry; fall back to the canonical node
+      // so the leader mirror stays in sync even if the caller omitted it.
+      const dept = (e.dept || '').trim() || await deptOf(e.empId);
+      updates[`${BASE}/employees/${e.empId}/assessmentId`] = e.assessmentId;
+      if (dept) updates[`${BASE}/employeesByDept/${dept}/${e.empId}/assessmentId`] = e.assessmentId;
+    }
+    if (Object.keys(updates).length) await update(ref(db), updates);
+  },
+
+  // Audit record of a push to PAS. Manager-only top-level node.
+  recordPasSubmission(empId, rec) {
+    return set(ref(db, `${BASE}/pasSubmissions/${empId}`), rec);
+  },
+
   setGroupWeight(groupId, weight) {
     return set(ref(db, `${BASE}/groupWeights/${groupId}`), weight);
   },

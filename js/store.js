@@ -15,6 +15,8 @@ export const state = {
   reviews: {},           // { empId: { reviewerEmpId: { status, answers, updatedAt, submittedAt } } }  — dept/full view (manager/leader)
   myReviews: {},         // { empId: { myId: review } }  — the current user's OWN reviews of their assignees (reviewer/leader-reviewer)
   finals: {},            // { empId: { qid: { score, edited: true } } }  — manager overrides only
+  finalComments: {},     // { empId: { text, updatedAt } }  — manager's final comment sent to PAS
+  pasSubmissions: {},    // { empId: { submittedAt, by } }  — record of pushes to PAS
   groupWeights: {},      // { groupId: weightPercent }  — per-group weight, edited directly in DB
   bands: null,           // [{ id, label, min, max }]  — classification thresholds, edited in DB
   managers: {},          // { emailKey: true }
@@ -48,7 +50,7 @@ export async function initStore(b) {
       state.authReady = true;
       if (!user) {
         state.dataReady = false;
-        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
+        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.finalComments = {}; state.pasSubmissions = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
       }
       notify();
     },
@@ -316,6 +318,33 @@ export function resetFinal(empId, qid) {
 export function resetAllFinals(empId) {
   if (!isManagerEditAllowed()) return periodLockedError();
   return backend.resetAllFinals(empId);
+}
+
+// Manager's final comment for an employee (sent to PAS as finalComment /
+// managerComment). Stored separately from per-reviewer overallComments.
+export function setFinalComment(empId, text) {
+  if (!isManagerEditAllowed()) return periodLockedError();
+  const t = (text || '').trim();
+  return backend.setFinalComment(empId, t ? { text: t, updatedAt: Date.now() } : null);
+}
+export function finalCommentOf(empId) {
+  const c = state.finalComments && state.finalComments[empId];
+  return (c && c.text) || '';
+}
+
+// Merge Assessment IDs onto existing employees WITHOUT touching any other
+// data (reviews/finals/assignments stay intact). entries: [{ empId, dept, assessmentId }].
+export function setEmployeeAssessmentIds(entries) {
+  if (!isManagerEditAllowed()) return periodLockedError();
+  const clean = (entries || []).filter(e => e && e.empId && e.assessmentId);
+  if (!clean.length) return Promise.resolve();
+  return backend.setAssessmentIds(clean);
+}
+
+// Record that this employee's result was pushed to PAS (audit + UI badge).
+export function recordPasSubmission(empId) {
+  const by = (state.authUser && state.authUser.email) || '';
+  return backend.recordPasSubmission(empId, { submittedAt: Date.now(), by });
 }
 
 // Per-group weight (%). Clamped to 0–100; manager-only (Bộ câu hỏi page).

@@ -11,11 +11,12 @@ import {
   isFractional, fractionalQuestionsOf,
   setFinal, resetFinal, resetAllFinals, assignReviewers,
   groupStats, weightedFinal, totalWeight, classify, bands,
-  isManagerEditAllowed,
+  isManagerEditAllowed, setFinalComment, finalCommentOf,
 } from '../store.js';
 import { inLeaderDept } from '../auth.js';
 import { nav } from '../router.js';
 import { STATUS, ROLE } from '../constants.js';
+import { openPasSubmitModal } from './pas-submit-modal.js';
 
 // Whether the inline per-question comments are collapsed. Module-level so the
 // "Ẩn/Hiện nhận xét" toggle survives re-renders (e.g. when a manager edits a
@@ -127,7 +128,7 @@ export function renderEmployeeDetail(container, empId, user) {
       : `
       ${groupOverviewHtml(empId)}
 
-      <div style="margin-bottom:22px">${resultBarHtml(empId)}</div>
+      <div style="margin-bottom:22px">${resultBarHtml(empId, isManager)}</div>
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:14px;flex-wrap:wrap">
         <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Bảng điểm chi tiết</h2>
@@ -164,7 +165,9 @@ export function renderEmployeeDetail(container, empId, user) {
       <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin:32px 0 14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Nhận xét tổng quan từ reviewer</h2>
       <div style="display:flex;flex-direction:column;gap:12px">
         ${commentsHtml(submitted, empReviews)}
-      </div>`}
+      </div>
+
+      ${finalCommentCardHtml(empId, isManager, canEdit)}`}
   `;
 
   wire(container, emp, user);
@@ -271,9 +274,10 @@ function groupOverviewHtml(empId) {
 
 // Final result bar (replaces the old plain-average navy row): weighted final +
 // classification chip + a button to open the detailed breakdown modal.
-function resultBarHtml(empId) {
+function resultBarHtml(empId, isManager) {
   const final = weightedFinal(empId);
   const band = classify(final);
+  const sub = state.pasSubmissions && state.pasSubmissions[empId];
   return `
     <div class="card" style="padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:18px;padding:16px 22px;background:var(--navy);flex-wrap:wrap">
@@ -290,7 +294,12 @@ function resultBarHtml(empId) {
           <span style="font-size:13px;color:rgba(255,255,255,0.6);font-weight:600">/5</span>
         </div>
         ${btn({ label: 'Chi tiết', variant: 'soft', size: 'sm', icon: 'grid', attrs: 'data-result' })}
+        ${isManager ? btn({ label: sub ? 'Nộp lại PAS' : 'Nộp lên PAS', variant: 'primary', size: 'sm', icon: 'upload', attrs: 'data-pas-submit' }) : ''}
       </div>
+      ${isManager && sub ? `
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 22px;background:#EAF7EF;border-top:1px solid #BFE3CC;font-size:12.5px;color:#147A50;font-weight:600">
+        ${icon('check', { size: 14, color: 'var(--ok)', stroke: 3 })} Đã nộp lên PAS lúc ${new Date(sub.submittedAt).toLocaleString('vi-VN')}${sub.by ? ' · ' + esc(sub.by) : ''}
+      </div>` : ''}
     </div>`;
 }
 
@@ -431,8 +440,53 @@ function commentsHtml(submitted, empReviews) {
     </div>`).join('');
 }
 
+// Manager's final comment — the text sent to PAS as finalComment/managerComment.
+// Editable for managers (when the period allows); read-only for leaders, and
+// only rendered for them when there's actually a comment to show.
+function finalCommentCardHtml(empId, isManager, canEdit) {
+  const text = finalCommentOf(empId);
+  if (!isManager && !text) return '';
+  return `
+    <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin:32px 0 14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Nhận xét final <span style="font-size:12.5px;font-weight:600;color:var(--sub)">(gửi lên PAS)</span></h2>
+    <div class="card" style="padding:18px">
+      ${isManager && canEdit ? `
+        <div style="font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:12px">Nhận xét tổng kết của Manager về nhân viên. Nội dung này sẽ được gửi lên PAS cùng điểm final.</div>
+        <textarea class="textarea" data-final-comment style="min-height:110px" placeholder="Viết nhận xét final…">${esc(text)}</textarea>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+          ${btn({ label: 'Lưu nhận xét', variant: 'ghost', size: 'sm', icon: 'check', attrs: 'data-save-final-comment' })}
+          <span data-final-comment-status style="font-size:12px;color:var(--faint)"></span>
+        </div>`
+      : `<div style="font-size:14px;color:var(--ink);line-height:1.6;white-space:pre-wrap">${esc(text)}</div>`}
+    </div>`;
+}
+
 function wire(container, emp, user) {
   container.querySelector('[data-back]').addEventListener('click', () => nav('/employees'));
+
+  const pasBtn = container.querySelector('[data-pas-submit]');
+  if (pasBtn) pasBtn.addEventListener('click', () => openPasSubmitModal(emp.id));
+
+  // Final comment: typing only mutates a local var (no re-render → caret stays
+  // put); saved explicitly, or on blur so a manager who clicks straight to
+  // "Nộp lên PAS" doesn't lose the text.
+  const fcTa = container.querySelector('[data-final-comment]');
+  const fcSaveBtn = container.querySelector('[data-save-final-comment]');
+  if (fcTa) {
+    let saved = finalCommentOf(emp.id);
+    const status = container.querySelector('[data-final-comment-status]');
+    const persist = async (announce) => {
+      if (fcTa.value === saved) return;
+      saved = fcTa.value;
+      try {
+        await setFinalComment(emp.id, fcTa.value);
+        if (announce && status) { status.textContent = 'Đã lưu.'; status.style.color = 'var(--ok)'; }
+      } catch (e) {
+        if (status) { status.textContent = 'Chưa lưu được.'; status.style.color = 'var(--danger)'; }
+      }
+    };
+    fcTa.addEventListener('blur', () => persist(false));
+    if (fcSaveBtn) fcSaveBtn.addEventListener('click', () => persist(true));
+  }
   const assignBtn = container.querySelector('[data-assign]');
   if (assignBtn) assignBtn.addEventListener('click', () => openAssignModal(emp));
 

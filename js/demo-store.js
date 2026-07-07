@@ -45,7 +45,7 @@ function seed() {
   ];
 
   const employees = {
-    e1: { name: 'Phạm Tuấn Kiệt', email: 'kiet@madison.tech', title: 'Frontend Engineer', dept: 'Engineering', order: 0, reviewerIds: { e_lan: true, e_huy: true } },
+    e1: { name: 'Phạm Tuấn Kiệt', email: 'kiet@madison.tech', title: 'Frontend Engineer', dept: 'Engineering', order: 0, reviewerIds: { e_lan: true, e_huy: true }, assessmentId: 'demo-assess-e1' },
     e2: { name: 'Đỗ Thu Hà', email: 'ha@madison.tech', title: 'Backend Engineer', dept: 'Engineering', order: 1, reviewerIds: { e_lan: true } },
     e3: { name: 'Vũ Đức Thắng', email: 'thang@madison.tech', title: 'Product Designer', dept: 'Product', order: 2, reviewerIds: { e_huy: true } },
     e4: { name: 'Bùi Khánh Linh', email: 'linh@madison.tech', title: 'Product Manager', dept: 'Product', order: 3, reviewerIds: { e_huy: true, e_mgr: true } },
@@ -103,6 +103,8 @@ function seed() {
     employees,
     reviews,
     finals: {},
+    finalComments: {},
+    pasSubmissions: {},
     groupWeights: { g1: 43, g2: 30, g3: 27 },
     bands: DEFAULT_BANDS.map(b => ({ ...b })),
     managers: { 'minhanh@madison,tech': true },
@@ -181,6 +183,8 @@ function emitAll() {
     handlers.onData('employees', clone(data.employees));
     handlers.onData('reviews', withReviewerNames(data.reviews));
     handlers.onData('finals', clone(data.finals));
+    handlers.onData('finalComments', clone(data.finalComments || {}));
+    handlers.onData('pasSubmissions', clone(data.pasSubmissions || {}));
     return;
   }
 
@@ -283,6 +287,26 @@ export const backend = {
   },
   resetAllFinals(empId) {
     mutate(d => { delete d.finals[empId]; });
+  },
+
+  setFinalComment(empId, val) {
+    mutate(d => {
+      if (!d.finalComments) d.finalComments = {};
+      if (val) d.finalComments[empId] = val; else delete d.finalComments[empId];
+    });
+  },
+
+  setAssessmentIds(entries) {
+    mutate(d => {
+      entries.forEach(e => { if (d.employees[e.empId]) d.employees[e.empId].assessmentId = e.assessmentId; });
+    });
+  },
+
+  recordPasSubmission(empId, rec) {
+    mutate(d => {
+      if (!d.pasSubmissions) d.pasSubmissions = {};
+      d.pasSubmissions[empId] = rec;
+    });
   },
 
   setGroupWeight(groupId, weight) {
