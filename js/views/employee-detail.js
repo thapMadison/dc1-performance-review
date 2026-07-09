@@ -128,7 +128,7 @@ export function renderEmployeeDetail(container, empId, user) {
       : `
       ${groupOverviewHtml(empId)}
 
-      <div style="margin-bottom:22px">${resultBarHtml(empId, isManager)}</div>
+      <div data-result-bar-sticky style="position:sticky;top:0;z-index:30;margin-bottom:22px">${resultBarHtml(empId, isManager)}</div>
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:14px;flex-wrap:wrap">
         <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Bảng điểm chi tiết</h2>
@@ -197,7 +197,7 @@ function finalCellHtml(fin, canEdit, qid) {
 function scoreTableHtml(empId, submitted, empReviews, canEdit, GRID) {
   return `
       <div class="score-table${qCommentsHidden ? ' score-table--hide-comments' : ''}" style="display:flex;flex-direction:column;gap:10px">
-        <div class="card" style="padding:0;overflow:hidden">
+        <div class="card" data-score-header-sticky style="padding:0;overflow:hidden;position:sticky;z-index:25;box-shadow:0 2px 8px rgba(15,23,41,0.06)">
           <div class="sr-row" style="${GRID};padding:12px 22px;background:#FAFBFC;align-items:center">
             <div class="u-label">Câu hỏi</div>
             ${submitted.map(u => `<div title="${esc(u.name)}" style="display:flex;justify-content:center">${avatar(u.name, 28)}</div>`).join('')}
@@ -462,6 +462,17 @@ function finalCommentCardHtml(empId, isManager, canEdit) {
 
 function wire(container, emp, user) {
   container.querySelector('[data-back]').addEventListener('click', () => nav('/employees'));
+
+  // Stack the score-table header sticky right under the result bar — the bar's
+  // height varies (e.g. the "Đã nộp lên PAS" strip adds a row), so measure it
+  // instead of hardcoding an offset. ResizeObserver self-disconnects once the
+  // container is detached on the next render, so no manual cleanup is needed.
+  const resultBarEl = container.querySelector('[data-result-bar-sticky]');
+  const scoreHeaderEl = container.querySelector('[data-score-header-sticky]');
+  if (resultBarEl && scoreHeaderEl) {
+    const ro = new ResizeObserver(() => { scoreHeaderEl.style.top = `${resultBarEl.offsetHeight}px`; });
+    ro.observe(resultBarEl);
+  }
 
   const pasBtn = container.querySelector('[data-pas-submit]');
   if (pasBtn) pasBtn.addEventListener('click', () => openPasSubmitModal(emp.id));
