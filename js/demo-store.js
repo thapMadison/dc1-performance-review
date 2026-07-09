@@ -190,17 +190,19 @@ function emitAll() {
 
   if (leaderDept) {
     // per-dept slice of each node
-    const emps = {}, revs = {}, fins = {};
+    const emps = {}, revs = {}, fins = {}, fcs = {};
     Object.entries(data.employees || {}).forEach(([id, e]) => {
       if ((e.dept || '').trim() === leaderDept) {
         emps[id] = e;
         if (data.reviews[id]) revs[id] = data.reviews[id];
         if (data.finals[id]) fins[id] = data.finals[id];
+        if (data.finalComments && data.finalComments[id]) fcs[id] = data.finalComments[id];
       }
     });
     handlers.onData('employees', clone(emps));
     handlers.onData('reviews', withReviewerNames(revs));
     handlers.onData('finals', clone(fins));
+    handlers.onData('finalComments', clone(fcs));
     // A leader may also be an employee with review assignments — emit their
     // reviewer-side data on top of the dept view (separate state slices).
     emitAssignmentSide(emailToEmpId[key] || null);

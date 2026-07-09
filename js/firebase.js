@@ -111,6 +111,7 @@ async function reconcileRoleSubscriptions() {
       employeesByDept: 'employees',
       reviewsByDept: 'reviews',
       finalsByDept: 'finals',
+      finalCommentsByDept: 'finalComments',
     };
     COLLECTIONS_LEADER.forEach(key => {
       roleUnsubs.push(onValue(ref(db, `${BASE}/${key}/${info.dept}`),
@@ -331,10 +332,13 @@ export const backend = {
     await update(ref(db), updates);
   },
 
-  // Manager's final comment (sent to PAS). Manager-only top-level node, no
-  // per-dept mirror (leaders don't need it). null clears the entry.
-  setFinalComment(empId, val) {
-    return set(ref(db, `${BASE}/finalComments/${empId}`), val);
+  // Manager's final comment (sent to PAS). Mirrored per-dept so leaders can
+  // read (view-only) their own members' final comments. null clears the entry.
+  async setFinalComment(empId, val) {
+    const dept = await deptOf(empId);
+    const updates = { [`${BASE}/finalComments/${empId}`]: val };
+    if (dept) updates[`${BASE}/finalCommentsByDept/${dept}/${empId}`] = val;
+    await update(ref(db), updates);
   },
 
   // Merge Assessment IDs onto existing employees. A single multi-path update

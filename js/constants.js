@@ -42,7 +42,7 @@ export const COLLECTIONS_MANAGER = Object.freeze([
 ]);
 // Leader denormalized mirrors (read under the /$dept child).
 export const COLLECTIONS_LEADER = Object.freeze([
-  'employeesByDept', 'reviewsByDept', 'finalsByDept',
+  'employeesByDept', 'reviewsByDept', 'finalsByDept', 'finalCommentsByDept',
 ]);
 
 // Every state key the store may hold, across all roles. Used by the demo
