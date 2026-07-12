@@ -6,9 +6,9 @@
 
 import { ROLE } from './constants.js';
 
-const MANAGER_PAGES = ['dashboard', 'employees', 'employee', 'questions', 'myreviews', 'review'];
-const LEADER_PAGES = ['employees', 'employee', 'myreviews', 'review'];
-const REVIEWER_PAGES = ['myreviews', 'review'];
+const MANAGER_PAGES = ['dashboard', 'employees', 'employee', 'questions', 'myreviews', 'review', 'myresult'];
+const LEADER_PAGES = ['employees', 'employee', 'myreviews', 'review', 'myresult'];
+const REVIEWER_PAGES = ['myreviews', 'review', 'myresult'];
 
 export function parseRoute() {
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);

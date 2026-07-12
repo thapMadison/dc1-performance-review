@@ -3,7 +3,7 @@
    wire auth + store + router, render the current screen.
 ═══════════════════════════════════════════════════════════════ */
 
-import { state, subscribe, initStore, backfillReviewerNames } from './store.js';
+import { state, subscribe, initStore, backfillReviewerNames, backfillMemberResults } from './store.js';
 import { resolveUser } from './auth.js';
 import { ROLE } from './constants.js';
 import { resolveRoute } from './router.js';
@@ -18,6 +18,7 @@ import { renderDashboard } from './views/dashboard.js';
 import { renderEmployees, clearEmployeesFilters } from './views/employees.js';
 import { renderEmployeeDetail } from './views/employee-detail.js';
 import { renderQuestions } from './views/questions.js';
+import { renderMyResult } from './views/my-result.js';
 
 const root = document.getElementById('root');
 const isDemo = new URLSearchParams(location.search).get('demo') === '1';
@@ -44,9 +45,10 @@ function render() {
   }
   if (!state.dataReady) { root.innerHTML = splash('Đang tải dữ liệu…'); return; }
 
-  // One-time, manager-only: backfill reviewerName onto existing reviews so
-  // leaders can show cross-dept reviewers' names (idempotent, self-guarded).
-  if (user.role === ROLE.MANAGER) backfillReviewerNames();
+  // One-time, manager-only backfills (idempotent, self-guarded): reviewerName
+  // onto existing reviews so leaders can show cross-dept reviewers' names, and
+  // memberResults snapshots for employees pushed to PAS before that node existed.
+  if (user.role === ROLE.MANAGER) { backfillReviewerNames(); backfillMemberResults(); }
 
   const route = resolveRoute(user);
   const routeKey = `${route.page}:${route.param || ''}`;
@@ -75,6 +77,7 @@ function render() {
   else if (route.page === 'questions') renderQuestions(content);
   else if (route.page === 'myreviews') renderMyReviews(content, user);
   else if (route.page === 'review') renderReviewForm(content, user, route.param);
+  else if (route.page === 'myresult') renderMyResult(content, user);
 
   root.querySelector('[data-scroll]').scrollTop = (routeKey === lastRouteKey) ? prevScroll : 0;
   lastRouteKey = routeKey;

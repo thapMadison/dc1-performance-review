@@ -15,14 +15,17 @@ export function sidebarHtml(user, route) {
         { id: 'employees', label: 'Nhân viên', icon: 'users' },
         { id: 'questions', label: 'Bộ câu hỏi', icon: 'help' },
         { id: 'myreviews', label: 'Đánh giá của tôi', icon: 'clipboard' },
+        { id: 'myresult', label: 'Kết quả của tôi', icon: 'star' },
       ]
     : user.role === ROLE.LEADER
     ? [
         { id: 'employees', label: 'Phòng ban của tôi', icon: 'users' },
         { id: 'myreviews', label: 'Đánh giá của tôi', icon: 'clipboard' },
+        { id: 'myresult', label: 'Kết quả của tôi', icon: 'star' },
       ]
     : [
         { id: 'myreviews', label: 'Đánh giá của tôi', icon: 'clipboard' },
+        { id: 'myresult', label: 'Kết quả của tôi', icon: 'star' },
       ];
   // detail pages keep their parent nav item highlighted
   const parent = { employee: 'employees', review: 'myreviews' }[route.page] || route.page;
@@ -84,6 +87,7 @@ const PAGE_TITLES = {
   questions: 'Bộ câu hỏi',
   myreviews: 'Đánh giá của tôi',
   review: 'Đánh giá',
+  myresult: 'Kết quả của tôi',
 };
 
 export function topbarHtml(user, route) {

@@ -8,7 +8,7 @@ import { STATUS, ROLE, COLLECTIONS_SHARED } from './constants.js';
 import { DEFAULT_BANDS } from './store.js';
 import { encodeEmailKey } from './auth.js';
 
-const KEY = 'madison_pr_demo_v5';
+const KEY = 'madison_pr_demo_v6';
 const AUTH_KEY = 'madison_pr_demo_auth';
 
 const DEMO_ACCOUNTS = [
@@ -52,7 +52,7 @@ function seed() {
     e5: { name: 'Hoàng Nam', email: 'nam@madison.tech', title: 'QA Engineer', dept: 'Engineering', order: 4, reviewerIds: { e_lan: true } },
     e6: { name: 'Ngô Mỹ Duyên', email: 'duyen@madison.tech', title: 'Data Analyst', dept: 'Data', order: 5, reviewerIds: {} },
     e_lan: { name: 'Nguyễn Thị Lan', email: 'lan@madison.tech', title: 'Engineering Lead', dept: 'Engineering', order: 6, reviewerIds: {} },
-    e_huy: { name: 'Lê Quang Huy', email: 'huy@madison.tech', title: 'Product Lead', dept: 'Product', order: 7, reviewerIds: {} },
+    e_huy: { name: 'Lê Quang Huy', email: 'huy@madison.tech', title: 'Product Lead', dept: 'Product', order: 7, reviewerIds: { e_lan: true } },
     e_mgr: { name: 'Trần Minh Anh', email: 'minhanh@madison.tech', title: 'Head of People', dept: 'People', order: 8, reviewerIds: {} },
   };
 
@@ -96,16 +96,40 @@ function seed() {
     e2: {
       e_lan: mkReview([4, 5, 4, 4, 3, 4, 4, 4], STATUS.DRAFT, null),
     },
+    e_huy: {
+      e_lan: mkReview([4, 5, 4, 4, 5, 4, 5, 5], STATUS.SUBMITTED, null,
+        'Huy dẫn dắt team product vững vàng, ưu tiên đúng việc và giao tiếp rõ ràng với các bên.'),
+    },
   };
+
+  const groupWeights = { g1: 43, g2: 30, g3: 27 };
+
+  // The reviewer demo account (Huy) is also a reviewee whose result was
+  // already finalized and pushed to PAS, so "Kết quả của tôi" is populated
+  // on first load. Snapshot mirrors buildMemberResultSnapshot(): per-question
+  // finals (single reviewer → their scores), weighted total, band, comment.
+  const huyScores = [4, 5, 4, 4, 5, 4, 5, 5];
+  const huyResult = { scores: {}, finalizedAt: Date.now() - 3600000 };
+  let hi = 0, weighted = 0;
+  groups.forEach(g => {
+    let sum = 0;
+    g.items.forEach(q => { huyResult.scores[q.id] = huyScores[hi]; sum += huyScores[hi]; hi++; });
+    weighted += (sum / g.items.length) * (groupWeights[g.id] / 100);
+  });
+  huyResult.weightedFinal = weighted;
+  const huyBand = DEFAULT_BANDS.find(b => weighted >= b.min && weighted <= b.max);
+  if (huyBand) { huyResult.bandId = huyBand.id; huyResult.bandLabel = huyBand.label; }
+  huyResult.finalComment = 'Năm làm việc chắc chắn của Huy: sản phẩm ra đúng lộ trình, team gắn kết. Kỳ tới tập trung xây năng lực kế thừa cho các bạn junior.';
 
   return {
     groups,
     employees,
     reviews,
     finals: {},
-    finalComments: {},
-    pasSubmissions: {},
-    groupWeights: { g1: 43, g2: 30, g3: 27 },
+    finalComments: { e_huy: { text: huyResult.finalComment, updatedAt: huyResult.finalizedAt } },
+    pasSubmissions: { e_huy: { submittedAt: huyResult.finalizedAt, by: 'minhanh@madison.tech' } },
+    memberResults: { e_huy: huyResult },
+    groupWeights,
     bands: DEFAULT_BANDS.map(b => ({ ...b })),
     managers: { 'minhanh@madison,tech': true },
     leaders: { 'lan@madison,tech': 'Engineering' },
@@ -185,6 +209,7 @@ function emitAll() {
     handlers.onData('finals', clone(data.finals));
     handlers.onData('finalComments', clone(data.finalComments || {}));
     handlers.onData('pasSubmissions', clone(data.pasSubmissions || {}));
+    handlers.onData('memberResults', clone(data.memberResults || {}));
     return;
   }
 
@@ -213,8 +238,9 @@ function emitAll() {
   emitAssignmentSide(emailToEmpId[key] || null);
 }
 
-// Emit the current user's reviewer-side slices: their assignment reverse-index
-// and their own reviews of each assignee (state.assignments / state.myReviews).
+// Emit the current user's reviewer-side slices: their assignment reverse-index,
+// their own reviews of each assignee (state.assignments / state.myReviews),
+// and their own finalized-result snapshot (state.memberResults[myId]).
 function emitAssignmentSide(myId) {
   const assignments = myId ? (deriveAssignments(data.employees)[myId] || {}) : {};
   handlers.onData('assignments', clone(assignments));
@@ -224,6 +250,8 @@ function emitAssignmentSide(myId) {
     if (r) myReviews[empId] = { [myId]: r };
   });
   handlers.onData('myReviews', clone(myReviews));
+  const mine = myId && (data.memberResults || {})[myId];
+  handlers.onData('memberResults', mine ? { [myId]: clone(mine) } : {});
 }
 function mutate(fn) { fn(data); persist(); emitAll(); }
 
@@ -304,10 +332,19 @@ export const backend = {
     });
   },
 
-  recordPasSubmission(empId, rec) {
+  recordPasSubmission(empId, rec, snapshot) {
     mutate(d => {
       if (!d.pasSubmissions) d.pasSubmissions = {};
       d.pasSubmissions[empId] = rec;
+      if (!d.memberResults) d.memberResults = {};
+      d.memberResults[empId] = snapshot;
+    });
+  },
+
+  backfillMemberResults(entries) {
+    mutate(d => {
+      if (!d.memberResults) d.memberResults = {};
+      entries.forEach(({ empId, snapshot }) => { d.memberResults[empId] = snapshot; });
     });
   },
 

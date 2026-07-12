@@ -32,13 +32,14 @@ export const ROLE = Object.freeze({
 //                 + to resolve the current user's role / empId).
 //   MANAGER     — full tree; only managers may read these.
 //   LEADER_*    — per-department denormalized mirrors a leader reads.
-//   reviewer    — assignments/$myId + reviews/$empId/$myId (handled ad hoc
-//                 in firebase.js, not a fixed top-level key list).
+//   reviewer    — assignments/$myId + reviews/$empId/$myId + memberResults/$myId
+//                 (handled ad hoc in firebase.js, not a fixed top-level key list).
 export const COLLECTIONS_SHARED = Object.freeze([
   'groups', 'groupWeights', 'bands', 'managers', 'leaders', 'emailToEmpId',
 ]);
 export const COLLECTIONS_MANAGER = Object.freeze([
   'employees', 'reviews', 'finals', 'finalComments', 'pasSubmissions',
+  'memberResults',
 ]);
 // Leader denormalized mirrors (read under the /$dept child).
 export const COLLECTIONS_LEADER = Object.freeze([

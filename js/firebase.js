@@ -147,9 +147,10 @@ function clearAssignmentSubs() {
 }
 
 // Subscribe the current user's own assignment list (reverse-index) + their own
-// review of each assignee. Used by both reviewers and leader-reviewers. The
-// caller has already set roleSig and cleared roleUnsubs; the assignment unsub
-// is registered in roleUnsubs so it's torn down on the next role change.
+// review of each assignee + their own finalized result snapshot. Used by both
+// reviewers and leader-reviewers. The caller has already set roleSig and
+// cleared roleUnsubs; the unsubs are registered so they're torn down on the
+// next role change.
 function wireAssignmentSubs(empId) {
   clearAssignmentSubs();
 
@@ -160,6 +161,14 @@ function wireAssignmentSubs(empId) {
     rewireReviewSubs(empId, Object.keys(val));
   }, err => console.error(`RTDB read failed for /${BASE}/assignments/${empId}:`, err));
   roleUnsubs.push(() => clearAssignmentSubs());
+
+  // Own finalized-result snapshot (written by the manager at PAS submit).
+  // Emitted as { empId: snapshot } so state.memberResults has the same shape
+  // for every role (managers subscribe the whole node).
+  roleUnsubs.push(onValue(ref(db, `${BASE}/memberResults/${empId}`), snap => {
+    const val = snap.val();
+    onDataCb('memberResults', val ? { [empId]: val } : {});
+  }, err => console.error(`RTDB read failed for /${BASE}/memberResults/${empId}:`, err)));
 }
 
 // Subscribe reviews/$empId/$myId for each assigned employee. Builds the
@@ -357,9 +366,29 @@ export const backend = {
     if (Object.keys(updates).length) await update(ref(db), updates);
   },
 
-  // Audit record of a push to PAS. Manager-only top-level node.
-  recordPasSubmission(empId, rec) {
-    return set(ref(db, `${BASE}/pasSubmissions/${empId}`), rec);
+  // Audit record of a push to PAS + the member-facing result snapshot
+  // (memberResults/$empId is the ONLY finals-derived node the reviewee can
+  // read — it carries aggregated finals only, never per-reviewer data).
+  // Written atomically so the "đã chốt" flag and what the member sees can't
+  // drift apart.
+  recordPasSubmission(empId, rec, snapshot) {
+    return update(ref(db), {
+      [`${BASE}/pasSubmissions/${empId}`]: rec,
+      [`${BASE}/memberResults/${empId}`]: snapshot,
+    });
+  },
+
+  // Manager-only backfill: employees pushed to PAS before memberResults
+  // existed get their snapshot recreated so they can see their result.
+  // entries: [{ empId, snapshot }]. Idempotent — callers pass only the
+  // submissions still missing a snapshot.
+  async backfillMemberResults(entries) {
+    if (!entries || !entries.length) return;
+    const updates = {};
+    entries.forEach(({ empId, snapshot }) => {
+      updates[`${BASE}/memberResults/${empId}`] = snapshot;
+    });
+    await update(ref(db), updates);
   },
 
   setGroupWeight(groupId, weight) {

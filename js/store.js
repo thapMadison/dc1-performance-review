@@ -17,6 +17,7 @@ export const state = {
   finals: {},            // { empId: { qid: { score, edited: true } } }  — manager overrides only
   finalComments: {},     // { empId: { text, updatedAt } }  — manager's final comment sent to PAS
   pasSubmissions: {},    // { empId: { submittedAt, by } }  — record of pushes to PAS
+  memberResults: {},     // { empId: { scores: {qid: score}, weightedFinal, bandId, bandLabel, finalComment, finalizedAt } }  — snapshot the reviewee may read (written at PAS submit)
   groupWeights: {},      // { groupId: weightPercent }  — per-group weight, edited directly in DB
   bands: null,           // [{ id, label, min, max }]  — classification thresholds, edited in DB
   managers: {},          // { emailKey: true }
@@ -50,7 +51,7 @@ export async function initStore(b) {
       state.authReady = true;
       if (!user) {
         state.dataReady = false;
-        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.finalComments = {}; state.pasSubmissions = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
+        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.finalComments = {}; state.pasSubmissions = {}; state.memberResults = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
       }
       notify();
     },
@@ -341,10 +342,33 @@ export function setEmployeeAssessmentIds(entries) {
   return backend.setAssessmentIds(clean);
 }
 
-// Record that this employee's result was pushed to PAS (audit + UI badge).
+// The member-facing result snapshot written to memberResults/$empId — the
+// only finals-derived node the reviewee themself can read. Carries ONLY
+// aggregated numbers (what PAS receives): per-question finals, weighted
+// total, band, final comment. Never per-reviewer scores/names, and not even
+// the `edited` flag. Keys with no value are omitted (RTDB rejects undefined).
+export function buildMemberResultSnapshot(empId, finalizedAt = Date.now()) {
+  const scores = {};
+  allQuestionIds().forEach(qid => {
+    const s = finalForQuestion(empId, qid).score;
+    if (s != null) scores[qid] = s;
+  });
+  const final = weightedFinal(empId);
+  const band = classify(final);
+  const snap = { scores, finalizedAt };
+  if (final != null) snap.weightedFinal = final;
+  if (band) { snap.bandId = band.id; snap.bandLabel = band.label; }
+  const comment = finalCommentOf(empId);
+  if (comment) snap.finalComment = comment;
+  return snap;
+}
+
+// Record that this employee's result was pushed to PAS (audit + UI badge),
+// and publish the matching snapshot to the reviewee in the same atomic write.
 export function recordPasSubmission(empId) {
   const by = (state.authUser && state.authUser.email) || '';
-  return backend.recordPasSubmission(empId, { submittedAt: Date.now(), by });
+  const now = Date.now();
+  return backend.recordPasSubmission(empId, { submittedAt: now, by }, buildMemberResultSnapshot(empId, now));
 }
 
 // Per-group weight (%). Clamped to 0–100; manager-only (Bộ câu hỏi page).
@@ -387,4 +411,24 @@ export function backfillReviewerNames() {
     });
   });
   if (entries.length) Promise.resolve(backend.backfillReviewerNames(entries)).catch(() => {});
+}
+
+// Manager-only: employees pushed to PAS before memberResults existed have no
+// snapshot, so their "Kết quả của tôi" page would stay empty. Recreate it from
+// the current finals/comment (the historical PAS payload was never stored) —
+// keyed on the original submittedAt. Same self-guarded pattern as above: safe
+// to call on every manager render, goes quiet once every submission has its
+// snapshot echoed back into state.
+const memberResultsBackfillAttempted = new Set();
+export function backfillMemberResults() {
+  if (!backend.backfillMemberResults) return;
+  if (!state.employees.length || !state.groups.length) return;   // manager data not loaded yet
+  const entries = [];
+  Object.entries(state.pasSubmissions || {}).forEach(([empId, sub]) => {
+    if (!sub || state.memberResults[empId]) return;              // already has a snapshot
+    if (memberResultsBackfillAttempted.has(empId)) return;       // write already issued, awaiting echo
+    memberResultsBackfillAttempted.add(empId);
+    entries.push({ empId, snapshot: buildMemberResultSnapshot(empId, sub.submittedAt || Date.now()) });
+  });
+  if (entries.length) Promise.resolve(backend.backfillMemberResults(entries)).catch(() => {});
 }
