@@ -107,7 +107,10 @@ function scoreTableHtml(scores) {
             const sc = scores[q.id];
             return `
             <div class="sr-row" style="${GRID};padding:11px 22px;border-bottom:1px solid var(--line);align-items:center">
-              <div style="font-size:14px;font-weight:600;color:var(--ink);padding-right:12px">${esc(q.text)}</div>
+              <div style="padding-right:12px">
+                <div style="font-size:14px;font-weight:600;color:var(--ink)">${esc(q.text)}</div>
+                ${q.hint ? `<div style="font-size:13px;color:var(--sub);margin-top:2px;line-height:1.45">${esc(q.hint)}</div>` : ''}
+              </div>
               <div style="text-align:center;font-size:14.5px;font-weight:700;color:${sc != null ? 'var(--ink)' : 'var(--faint)'}">${sc != null ? sc : '—'}</div>
             </div>`;
           }).join('')}
