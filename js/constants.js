@@ -39,7 +39,7 @@ export const COLLECTIONS_SHARED = Object.freeze([
 ]);
 export const COLLECTIONS_MANAGER = Object.freeze([
   'employees', 'reviews', 'finals', 'finalComments', 'pasSubmissions',
-  'memberResults',
+  'memberResults', 'selfResponses',
 ]);
 // Leader denormalized mirrors (read under the /$dept child).
 export const COLLECTIONS_LEADER = Object.freeze([

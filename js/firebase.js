@@ -169,6 +169,14 @@ function wireAssignmentSubs(empId) {
     const val = snap.val();
     onDataCb('memberResults', val ? { [empId]: val } : {});
   }, err => console.error(`RTDB read failed for /${BASE}/memberResults/${empId}:`, err)));
+
+  // Own self-assessment (imported from PAS) — the reviewee compares it against
+  // their manager's final result on the "Kết quả của tôi" page. Same
+  // { empId: … } shape as memberResults so state.selfResponses is role-agnostic.
+  roleUnsubs.push(onValue(ref(db, `${BASE}/selfResponses/${empId}`), snap => {
+    const val = snap.val();
+    onDataCb('selfResponses', val ? { [empId]: val } : {});
+  }, err => console.error(`RTDB read failed for /${BASE}/selfResponses/${empId}:`, err)));
 }
 
 // Subscribe reviews/$empId/$myId for each assigned employee. Builds the

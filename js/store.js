@@ -18,6 +18,7 @@ export const state = {
   finalComments: {},     // { empId: { text, updatedAt } }  — manager's final comment sent to PAS
   pasSubmissions: {},    // { empId: { submittedAt, by } }  — record of pushes to PAS
   memberResults: {},     // { empId: { scores: {qid: score}, weightedFinal, bandId, bandLabel, finalComment, finalizedAt } }  — snapshot the reviewee may read (written at PAS submit)
+  selfResponses: {},     // { empId: { scores: {qid: score}, comment, totalScore } }  — employee's own PAS self-assessment (imported), reviewee may read their own
   groupWeights: {},      // { groupId: weightPercent }  — per-group weight, edited directly in DB
   bands: null,           // [{ id, label, min, max }]  — classification thresholds, edited in DB
   managers: {},          // { emailKey: true }
@@ -51,7 +52,7 @@ export async function initStore(b) {
       state.authReady = true;
       if (!user) {
         state.dataReady = false;
-        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.finalComments = {}; state.pasSubmissions = {}; state.memberResults = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
+        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.finalComments = {}; state.pasSubmissions = {}; state.memberResults = {}; state.selfResponses = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
       }
       notify();
     },

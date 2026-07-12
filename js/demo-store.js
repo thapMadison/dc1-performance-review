@@ -121,6 +121,19 @@ function seed() {
   if (huyBand) { huyResult.bandId = huyBand.id; huyResult.bandLabel = huyBand.label; }
   huyResult.finalComment = 'Năm làm việc chắc chắn của Huy: sản phẩm ra đúng lộ trình, team gắn kết. Kỳ tới tập trung xây năng lực kế thừa cho các bạn junior.';
 
+  // Huy's own PAS self-assessment (imported) — deliberately a bit more modest
+  // than the manager's finals so the side-by-side comparison is visible.
+  const huySelfScores = [4, 4, 4, 4, 4, 3, 5, 5];
+  const huySelf = { scores: {}, totalScore: null };
+  let si = 0, selfWeighted = 0;
+  groups.forEach(g => {
+    let sum = 0;
+    g.items.forEach(q => { huySelf.scores[q.id] = huySelfScores[si]; sum += huySelfScores[si]; si++; });
+    selfWeighted += (sum / g.items.length) * (groupWeights[g.id] / 100);
+  });
+  huySelf.totalScore = Math.round(selfWeighted * 100) / 100;
+  huySelf.comment = 'Em tự thấy năm nay hoàn thành tốt phần công việc được giao, sản phẩm ổn định. Về giao tiếp và trình bày quan điểm trong các buổi thảo luận em vẫn còn hơi ngại nên tự chấm khiêm tốn, sẽ cố gắng chủ động hơn ở kỳ tới.';
+
   return {
     groups,
     employees,
@@ -129,6 +142,7 @@ function seed() {
     finalComments: { e_huy: { text: huyResult.finalComment, updatedAt: huyResult.finalizedAt } },
     pasSubmissions: { e_huy: { submittedAt: huyResult.finalizedAt, by: 'minhanh@madison.tech' } },
     memberResults: { e_huy: huyResult },
+    selfResponses: { e_huy: huySelf },
     groupWeights,
     bands: DEFAULT_BANDS.map(b => ({ ...b })),
     managers: { 'minhanh@madison,tech': true },
@@ -210,6 +224,7 @@ function emitAll() {
     handlers.onData('finalComments', clone(data.finalComments || {}));
     handlers.onData('pasSubmissions', clone(data.pasSubmissions || {}));
     handlers.onData('memberResults', clone(data.memberResults || {}));
+    handlers.onData('selfResponses', clone(data.selfResponses || {}));
     return;
   }
 
@@ -252,6 +267,8 @@ function emitAssignmentSide(myId) {
   handlers.onData('myReviews', clone(myReviews));
   const mine = myId && (data.memberResults || {})[myId];
   handlers.onData('memberResults', mine ? { [myId]: clone(mine) } : {});
+  const mySelf = myId && (data.selfResponses || {})[myId];
+  handlers.onData('selfResponses', mySelf ? { [myId]: clone(mySelf) } : {});
 }
 function mutate(fn) { fn(data); persist(); emitAll(); }
 
