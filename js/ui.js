@@ -132,7 +132,7 @@ export function scoreChip(value, { size = 'md', muted = false } = {}) {
   const colorFor = v => v >= 4.5 ? 'var(--ok)' : v >= 3.5 ? 'var(--blue)' : v >= 2.5 ? 'var(--warn)' : 'var(--danger)';
   const c = muted ? 'var(--sub)' : colorFor(value);
   const big = size === 'lg';
-  const num = Number.isInteger(value) ? value : value.toFixed(1);
+  const num = (Math.round(value * 100) / 100).toFixed(2);
   return `<span style="display:inline-flex;align-items:baseline;gap:2px;font-weight:700;color:${c};font-size:${big ? 22 : 15}px;letter-spacing:-0.02em">${num}<span style="font-size:${big ? 12 : 10}px;color:var(--faint);font-weight:600">/5</span></span>`;
 }
 

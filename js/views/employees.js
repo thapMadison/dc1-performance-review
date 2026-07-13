@@ -4,7 +4,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { esc, icon, avatar, scoreChip, pageHead, emptyState, btn, countdownBanner } from '../ui.js';
-import { state, empProgress, empAvg, fractionalQuestionsOf, finalCommentOf } from '../store.js';
+import { state, empProgress, weightedFinal, fractionalQuestionsOf, finalCommentOf } from '../store.js';
 import { inLeaderDept, encodeEmailKey } from '../auth.js';
 import { nav } from '../router.js';
 import { openImportModal } from './import-modal.js';
@@ -86,7 +86,7 @@ export function renderEmployees(container, user) {
       </div>
       ${list.map((e, i) => {
         const p = empProgress(e);
-        const avg = empAvg(e.id);
+        const avg = weightedFinal(e.id);
         const fullDone = p.assigned > 0 && p.submitted === p.assigned;
         const fracN = fractionalQuestionsOf(e.id).length;
         return `
