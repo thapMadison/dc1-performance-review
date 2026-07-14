@@ -16,9 +16,12 @@ export const STATUS = Object.freeze({
   LOCKED: 'locked',
 });
 
-// User roles (precedence manager > leader > reviewer).
+// User roles (precedence manager > director > leader > reviewer).
+// director = read-only view over ALL employees across every department
+// (like manager's read scope, but no editing/assign/PAS).
 export const ROLE = Object.freeze({
   MANAGER: 'manager',
+  DIRECTOR: 'director',
   LEADER: 'leader',
   REVIEWER: 'reviewer',
 });
@@ -35,7 +38,7 @@ export const ROLE = Object.freeze({
 //   reviewer    — assignments/$myId + reviews/$empId/$myId + memberResults/$myId
 //                 (handled ad hoc in firebase.js, not a fixed top-level key list).
 export const COLLECTIONS_SHARED = Object.freeze([
-  'groups', 'groupWeights', 'bands', 'managers', 'leaders', 'emailToEmpId',
+  'groups', 'groupWeights', 'bands', 'managers', 'leaders', 'directors', 'emailToEmpId',
 ]);
 export const COLLECTIONS_MANAGER = Object.freeze([
   'employees', 'reviews', 'finals', 'finalComments', 'pasSubmissions',
@@ -44,6 +47,12 @@ export const COLLECTIONS_MANAGER = Object.freeze([
 // Leader denormalized mirrors (read under the /$dept child).
 export const COLLECTIONS_LEADER = Object.freeze([
   'employeesByDept', 'reviewsByDept', 'finalsByDept', 'finalCommentsByDept',
+]);
+// Director reads the canonical tree read-only, but only the nodes granted in
+// database.rules.json — NOT pasSubmissions (submission metadata stays
+// manager-only; irrelevant to viewing results).
+export const COLLECTIONS_DIRECTOR = Object.freeze([
+  'employees', 'reviews', 'finals', 'finalComments', 'selfResponses', 'memberResults',
 ]);
 
 // Every state key the store may hold, across all roles. Used by the demo

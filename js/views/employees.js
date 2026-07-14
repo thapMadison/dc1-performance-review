@@ -41,7 +41,10 @@ function pasCellHtml(e) {
 
 export function renderEmployees(container, user) {
   const isMgr = user.role === ROLE.MANAGER;
-  const scoped = isMgr ? state.employees : state.employees.filter(e => inLeaderDept(user, e));
+  // Manager and director both see every employee; a leader is scoped to their
+  // own department. (isMgr alone still gates import + the PAS column below.)
+  const seesAll = isMgr || user.role === ROLE.DIRECTOR;
+  const scoped = seesAll ? state.employees : state.employees.filter(e => inLeaderDept(user, e));
   const fracEmps = scoped.filter(e => fractionalQuestionsOf(e.id).length > 0);
   const fracCount = fracEmps.length;
   if (!fracCount) onlyFractional = false; // nothing to filter → reset
@@ -60,6 +63,9 @@ export function renderEmployees(container, user) {
       desc: 'Toàn bộ nhân viên trong chu kỳ. Phân công reviewer và xem điểm số cuối cùng.',
       actionsHtml: btn({ label: 'Import Assessment ID', variant: 'ghost', icon: 'upload', attrs: 'data-import-assessment' })
         + btn({ label: 'Import Excel', variant: 'ghost', icon: 'upload', attrs: 'data-import' }),
+    } : user.role === ROLE.DIRECTOR ? {
+      eyebrow: 'Director', title: 'Nhân viên',
+      desc: 'Toàn bộ nhân viên mọi phòng ban và kết quả đánh giá tương ứng (chỉ xem).',
     } : {
       eyebrow: `Leader · ${user.dept}`, title: 'Phòng ban của tôi',
       desc: 'Nhân viên thuộc phòng ban của bạn và kết quả đánh giá tương ứng (chỉ xem).',

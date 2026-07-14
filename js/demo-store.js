@@ -8,11 +8,12 @@ import { STATUS, ROLE, COLLECTIONS_SHARED } from './constants.js';
 import { DEFAULT_BANDS } from './store.js';
 import { encodeEmailKey } from './auth.js';
 
-const KEY = 'madison_pr_demo_v6';
+const KEY = 'madison_pr_demo_v7';
 const AUTH_KEY = 'madison_pr_demo_auth';
 
 const DEMO_ACCOUNTS = [
   { name: 'Trần Minh Anh', email: 'minhanh@madison.tech', role: ROLE.MANAGER, title: 'Head of People' },
+  { name: 'Phan Vũ Đăng', email: 'dang@madison.tech', role: ROLE.DIRECTOR, title: 'Director' },
   { name: 'Nguyễn Thị Lan', email: 'lan@madison.tech', role: ROLE.LEADER, title: 'Engineering Lead' },
   { name: 'Lê Quang Huy', email: 'huy@madison.tech', role: ROLE.REVIEWER, title: 'Product Lead' },
 ];
@@ -147,6 +148,7 @@ function seed() {
     bands: DEFAULT_BANDS.map(b => ({ ...b })),
     managers: { 'minhanh@madison,tech': true },
     leaders: { 'lan@madison,tech': 'Engineering' },
+    directors: { 'dang@madison,tech': true },
   };
 }
 
@@ -214,7 +216,8 @@ function emitAll() {
   if (!currentEmail) return;
   const key = encodeEmailKey(currentEmail.toLowerCase());
   const isManager = !!(data.managers || {})[key];
-  const leaderDept = !isManager && typeof (data.leaders || {})[key] === 'string'
+  const isDirector = !isManager && !!(data.directors || {})[key];
+  const leaderDept = !isManager && !isDirector && typeof (data.leaders || {})[key] === 'string'
     ? data.leaders[key].trim() : null;
 
   if (isManager) {
@@ -225,6 +228,32 @@ function emitAll() {
     handlers.onData('pasSubmissions', clone(data.pasSubmissions || {}));
     handlers.onData('memberResults', clone(data.memberResults || {}));
     handlers.onData('selfResponses', clone(data.selfResponses || {}));
+    return;
+  }
+
+  if (isDirector) {
+    // Read-only over the full canonical tree, INCLUDING memberResults/
+    // selfResponses (so a director can view every employee's finalized result
+    // + self-assessment, same shape as the manager's read). Only pasSubmissions
+    // (audit metadata) stays manager-only. Assignment-side (own assignments/
+    // myReviews) is still wired for a director who is also an employee, but we
+    // skip its memberResults/selfResponses emit here since the full-tree emit
+    // above already covers every empId including their own.
+    handlers.onData('employees', clone(data.employees));
+    handlers.onData('reviews', withReviewerNames(data.reviews));
+    handlers.onData('finals', clone(data.finals));
+    handlers.onData('finalComments', clone(data.finalComments || {}));
+    handlers.onData('memberResults', clone(data.memberResults || {}));
+    handlers.onData('selfResponses', clone(data.selfResponses || {}));
+    const myId = emailToEmpId[key] || null;
+    const assignments = myId ? (deriveAssignments(data.employees)[myId] || {}) : {};
+    handlers.onData('assignments', clone(assignments));
+    const myReviews = {};
+    Object.keys(assignments).forEach(empId => {
+      const r = data.reviews[empId] && data.reviews[empId][myId];
+      if (r) myReviews[empId] = { [myId]: r };
+    });
+    handlers.onData('myReviews', clone(myReviews));
     return;
   }
 

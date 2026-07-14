@@ -25,7 +25,7 @@ import {
   initializeAppCheck, ReCaptchaV3Provider,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 import { firebaseConfig, MS_TENANT, RECAPTCHA_SITE_KEY } from './firebase-config.js';
-import { COLLECTIONS_SHARED, COLLECTIONS_MANAGER, COLLECTIONS_LEADER } from './constants.js';
+import { COLLECTIONS_SHARED, COLLECTIONS_MANAGER, COLLECTIONS_LEADER, COLLECTIONS_DIRECTOR } from './constants.js';
 import { encodeEmailKey } from './auth.js';
 
 let auth = null;
@@ -35,7 +35,7 @@ let roleUnsubs = [];     // phase-2 subscriptions (role-scoped nodes)
 let onDataCb = null;
 
 // Latest shared snapshots we need to resolve role/empId in phase 2.
-const sharedSnap = { managers: {}, leaders: {}, emailToEmpId: {} };
+const sharedSnap = { managers: {}, leaders: {}, directors: {}, emailToEmpId: {} };
 let currentEmail = '';
 // Signature of the phase-2 subscription set, so we only re-subscribe when
 // the role / dept / assignment-set actually changes.
@@ -69,6 +69,9 @@ function resolveRoleInfo() {
   const key = encodeEmailKey(email);
   if (sharedSnap.managers[key]) return { role: 'manager' };
   const empId = sharedSnap.emailToEmpId[key] || null;
+  // Director reads the full canonical tree read-only; carry empId so their own
+  // reviewer/result pages still work if they're also an employee.
+  if (sharedSnap.directors[key]) return { role: 'director', empId };
   const dept = typeof sharedSnap.leaders[key] === 'string' ? sharedSnap.leaders[key].trim() : null;
   // A leader may also be an employee with review assignments — carry empId so
   // reconcileRoleSubscriptions can additionally wire their reviewer-side data.
@@ -92,6 +95,26 @@ async function reconcileRoleSubscriptions() {
       roleUnsubs.push(onValue(ref(db, `${BASE}/${key}`), snap => onDataCb(key, snap.val()),
         err => console.error(`RTDB read failed for /${BASE}/${key}:`, err)));
     });
+    return;
+  }
+
+  if (info.role === 'director') {
+    // Read-only over the full canonical tree (same reads as a manager; the
+    // rules deny every write). empId is part of the sig so we re-wire to add
+    // their own assignment-side data once emailToEmpId resolves.
+    const sig = `director:${info.empId || 'none'}`;
+    if (sig === roleSig) return;
+    roleSig = sig;
+    clearUnsubs(roleUnsubs);
+    clearAssignmentSubs();
+    COLLECTIONS_DIRECTOR.forEach(key => {
+      roleUnsubs.push(onValue(ref(db, `${BASE}/${key}`), snap => onDataCb(key, snap.val()),
+        err => console.error(`RTDB read failed for /${BASE}/${key}:`, err)));
+    });
+    // Additive: a director who is also an employee gets their own "Đánh giá của
+    // tôi" page wired on top of the read-only tree (assignments/myReviews only —
+    // memberResults/selfResponses already arrived in full above).
+    if (info.empId) wireAssignmentSubs(info.empId, { ownResult: false });
     return;
   }
 
@@ -151,7 +174,7 @@ function clearAssignmentSubs() {
 // reviewers and leader-reviewers. The caller has already set roleSig and
 // cleared roleUnsubs; the unsubs are registered so they're torn down on the
 // next role change.
-function wireAssignmentSubs(empId) {
+function wireAssignmentSubs(empId, { ownResult = true } = {}) {
   clearAssignmentSubs();
 
   // Each change to the assignment list re-derives which reviews we must read.
@@ -161,6 +184,13 @@ function wireAssignmentSubs(empId) {
     rewireReviewSubs(empId, Object.keys(val));
   }, err => console.error(`RTDB read failed for /${BASE}/assignments/${empId}:`, err));
   roleUnsubs.push(() => clearAssignmentSubs());
+
+  // ownResult=false: skip memberResults/selfResponses — used by the director
+  // branch, which already subscribes those nodes in full via COLLECTIONS_DIRECTOR;
+  // subscribing the $empId-scoped path here would fire onDataCb with just
+  // { [empId]: val } and clobber the full-tree state (state[key] is a full
+  // replace, not a merge — see store.js onData).
+  if (!ownResult) return;
 
   // Own finalized-result snapshot (written by the manager at PAS submit).
   // Emitted as { empId: snapshot } so state.memberResults has the same shape
@@ -206,7 +236,7 @@ function unsubscribeAll() {
   clearUnsubs(roleUnsubs);
   clearAssignmentSubs();
   roleSig = null;
-  sharedSnap.managers = {}; sharedSnap.leaders = {}; sharedSnap.emailToEmpId = {};
+  sharedSnap.managers = {}; sharedSnap.leaders = {}; sharedSnap.directors = {}; sharedSnap.emailToEmpId = {};
 }
 
 /* ─────────── Denormalization helpers (write side) ─────────── */

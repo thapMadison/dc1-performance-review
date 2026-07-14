@@ -10,7 +10,7 @@ import {
   state, reviewerIdsOf, avgForQuestion, finalForQuestion,
   isFractional, fractionalQuestionsOf,
   setFinal, resetFinal, resetAllFinals, assignReviewers,
-  groupStats, weightedFinal, totalWeight, classify, bands,
+  groupStats, weightedFinal, totalWeight, classify, bands, groupWeight,
   isManagerEditAllowed, setFinalComment, finalCommentOf,
 } from '../store.js';
 import { inLeaderDept } from '../auth.js';
@@ -30,6 +30,7 @@ export function renderEmployeeDetail(container, empId, user) {
     return;
   }
   const isManager = user.role === ROLE.MANAGER;
+  const isDirector = user.role === ROLE.DIRECTOR;
   const period = reviewPeriodStatus();
   // Final-score editing stays open for managers after the deadline expires —
   // only the pre-start lock blocks it. Reviewer assignment is a setup action,
@@ -100,6 +101,7 @@ export function renderEmployeeDetail(container, empId, user) {
       </div>
     </div>
 
+    ${isDirector ? '' : `
     <div class="card" style="padding:20px;margin-bottom:22px">
       <div style="display:flex;justify-content:space-between;align-items:center;${assigned.length ? 'margin-bottom:16px' : ''}">
         <div style="font-size:12px;font-weight:700;color:var(--faint);letter-spacing:0.1em;text-transform:uppercase">Reviewer được phân công</div>
@@ -121,15 +123,18 @@ export function renderEmployeeDetail(container, empId, user) {
           }).join('')}
         </div>`
         : `<div style="font-size:13.5px;color:var(--sub);padding-top:4px">Chưa có reviewer nào.${canAssign ? ' Bấm <b>Phân công</b> để bắt đầu.' : ''}</div>`}
-    </div>
+    </div>`}
 
     ${submitted.length === 0
       ? `<div class="card">${emptyState({ icon: 'clipboard', title: 'Chưa có đánh giá nào được nộp', desc: 'Bảng điểm và điểm final sẽ xuất hiện khi reviewer nộp bản đánh giá.' })}</div>`
       : `
-      ${groupOverviewHtml(empId)}
+      ${isDirector ? '' : groupOverviewHtml(empId)}
 
       <div data-result-bar-sticky style="position:sticky;top:0;z-index:30;margin-bottom:22px">${resultBarHtml(empId, isManager)}</div>
 
+      ${selfAssessmentHtml(empId)}
+
+      ${isDirector ? '' : `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:14px;flex-wrap:wrap">
         <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Bảng điểm chi tiết</h2>
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -160,12 +165,13 @@ export function renderEmployeeDetail(container, empId, user) {
         <span style="width:12px;height:12px;border-radius:3px;background:var(--blue-hi);border:1.5px solid var(--blue);display:inline-block"></span>
         Ô tô màu xanh = điểm final đã được Manager chỉnh sửa thủ công.
         <button class="text-underline-btn" data-reset-all style="color:var(--blue);font-weight:700;margin-left:4px">Đặt lại tất cả về trung bình</button>
-      </div>` : ''}
+      </div>` : ''}`}
 
+      ${isDirector ? '' : `
       <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin:32px 0 14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Nhận xét tổng quan từ reviewer</h2>
       <div style="display:flex;flex-direction:column;gap:12px">
         ${commentsHtml(submitted, empReviews)}
-      </div>
+      </div>`}
 
       ${finalCommentCardHtml(empId, isManager, canEdit)}`}
   `;
@@ -269,6 +275,100 @@ function groupOverviewHtml(empId) {
           </div>`;
         }).join('')}
       </div>
+    </div>`;
+}
+
+// Score color scale (1–5): same palette as my-result.js's comparison chips,
+// so a director sees the identical visual language on both pages.
+const SELF_SCORE_COLORS = {
+  5: { fg: '#147A50', bg: '#E3F5EB' },
+  4: { fg: '#1D6FD6', bg: '#E8F1FC' },
+  3: { fg: '#B26A00', bg: '#FDF2DF' },
+  2: { fg: '#C2410C', bg: '#FCEBE1' },
+  1: { fg: '#B91C1C', bg: '#FBE7E7' },
+};
+function selfChip(v, strong) {
+  if (v == null) return '<span style="font-size:14px;font-weight:700;color:var(--faint)">—</span>';
+  const c = SELF_SCORE_COLORS[v] || { fg: 'var(--ink)', bg: '#F0F2F5' };
+  return strong
+    ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:25px;padding:0 7px;border-radius:8px;background:${c.bg};color:${c.fg};font-size:13.5px;font-weight:700">${v}</span>`
+    : `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:25px;padding:0 7px;border-radius:8px;background:#fff;border:1.5px solid ${c.fg}40;color:${c.fg};font-size:13px;font-weight:700">${v}</span>`;
+}
+
+// Self-assessment block — the employee's own PAS answers, shown side-by-side
+// with the manager's final per question (mirrors views/my-result.js so a
+// director/manager sees exactly what the reviewee sees on "Kết quả của tôi").
+// Renders nothing when the employee never submitted a self-assessment.
+function selfAssessmentHtml(empId) {
+  const self = state.selfResponses && state.selfResponses[empId];
+  if (!self || !self.scores) return '';
+  const selfScores = self.scores;
+  const GRID = 'display:grid;grid-template-columns:1fr 82px 82px;gap:0';
+  const avgOf = (items, src) => items.length
+    ? items.reduce((a, q) => a + (src[q.id] ?? 0), 0) / items.length : null;
+
+  const groupsHtml = state.groups.map((g, gi) => {
+    const color = GROUP_COLORS[gi % GROUP_COLORS.length];
+    const items = g.items || [];
+    const selfAvg = avgOf(items, selfScores);
+    const finAvg = avgOf(items, Object.fromEntries(items.map(q => [q.id, finalForQuestion(empId, q.id).score ?? 0])));
+    const weight = groupWeight(g.id);
+    return `
+    <div class="card sr-grp" style="padding:0;overflow:hidden;border-left:3px solid ${color}">
+      <button class="sr-band" data-sa-toggle="${esc(g.id)}" style="${GRID};align-items:center;padding:8px 22px;background:#F3F6F9;font-size:12px;font-weight:700;color:var(--navy);letter-spacing:0.02em;width:100%;border:none;border-bottom:1px solid var(--line);cursor:pointer;font-family:var(--font);text-align:left;transition:background .14s">
+        <span style="display:flex;align-items:center;gap:8px;min-width:0;padding-right:12px">
+          <span style="width:18px;height:18px;border-radius:5px;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">${gi + 1}</span>
+          <span style="min-width:0">
+            <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}</span>
+            <span style="display:block;font-size:10.5px;font-weight:600;color:var(--faint);letter-spacing:0.02em">Trọng số ${weight}%</span>
+          </span>
+        </span>
+        <span style="text-align:center;font-size:13px;font-weight:700;color:var(--sub)">${fmt2(selfAvg)}</span>
+        <span style="display:flex;align-items:center;justify-content:center;gap:6px">
+          <span style="font-size:13.5px;font-weight:700;color:var(--ink)">${fmt2(finAvg)}</span>
+          <svg data-sa-chevron="${esc(g.id)}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .22s"><polyline points="6 9 12 15 18 9"/></svg>
+        </span>
+      </button>
+      <div class="sr-grp-body" data-sa-body="${esc(g.id)}">
+      ${items.map(q => {
+        const selfSc = selfScores[q.id];
+        const finSc = finalForQuestion(empId, q.id).score;
+        const diff = finSc != null && selfSc != null ? finSc - selfSc : null;
+        const rowBg = diff ? (diff > 0 ? '#F7FCF9' : '#FEF6F5') : '';
+        return `
+        <div class="sr-row" style="${GRID};padding:11px 22px;border-bottom:1px solid var(--line);align-items:center${rowBg ? `;background:${rowBg}` : ''}">
+          <div style="padding-right:12px">
+            <div style="font-size:14px;font-weight:600;color:var(--ink)">${esc(q.text)}</div>
+          </div>
+          <div style="text-align:center">${selfChip(selfSc, false)}</div>
+          <div style="text-align:center;position:relative">
+            ${selfChip(finSc, true)}
+            ${diff ? `<span style="position:absolute;top:50%;right:2px;transform:translateY(-50%);font-size:10px;font-weight:700;color:${diff > 0 ? 'var(--ok)' : '#C0392B'}">${diff > 0 ? '+' : ''}${diff}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  const hasComment = !!(self.comment && self.comment.trim());
+
+  return `
+    <div style="margin-bottom:22px">
+      <h2 style="font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;margin-bottom:14px;display:flex;align-items:center;gap:10px">${eyebrowMark(11)}Tự đánh giá (Self-assessment)</h2>
+      <div style="${GRID};padding:0 22px 8px;align-items:end">
+        <div></div>
+        <div style="text-align:center;font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:0.04em;text-transform:uppercase">Tự đánh giá</div>
+        <div style="text-align:center;font-size:10.5px;font-weight:700;color:var(--navy);letter-spacing:0.04em;text-transform:uppercase">Final</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:${hasComment ? '14px' : '0'}">
+        ${groupsHtml}
+      </div>
+      ${hasComment ? `
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:9px 18px;background:#F3F6F9;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--sub);letter-spacing:0.05em;text-transform:uppercase">Nhận xét tự đánh giá</div>
+        <div style="padding:16px 18px;font-size:14px;color:var(--ink);line-height:1.6;white-space:pre-wrap">${esc(self.comment.trim())}</div>
+      </div>` : ''}
     </div>`;
 }
 
@@ -520,6 +620,12 @@ function wire(container, emp, user) {
   // group collapse / expand
   wireCollapsibles(container, {
     toggleAttr: 'data-ed-toggle', bodyAttr: 'data-ed-body', chevronAttr: 'data-ed-chevron',
+    collapsedClass: 'sr-grp-body--collapsed',
+    onToggle: (btn, collapsed) => { btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)'; },
+  });
+  // self-assessment group collapse / expand
+  wireCollapsibles(container, {
+    toggleAttr: 'data-sa-toggle', bodyAttr: 'data-sa-body', chevronAttr: 'data-sa-chevron',
     collapsedClass: 'sr-grp-body--collapsed',
     onToggle: (btn, collapsed) => { btn.style.borderBottom = collapsed ? 'none' : '1px solid var(--line)'; },
   });

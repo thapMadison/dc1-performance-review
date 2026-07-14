@@ -23,6 +23,7 @@ export const state = {
   bands: null,           // [{ id, label, min, max }]  — classification thresholds, edited in DB
   managers: {},          // { emailKey: true }
   leaders: {},           // { emailKey: '<dept name>' }
+  directors: {},         // { emailKey: true }  — read-only view over all employees
   emailToEmpId: {},      // { emailKey: empId }  — shared lookup, no sensitive data
   assignments: {},       // reviewer view: { empId: { empId, name, title } } from /assignments/$myId
 };
@@ -52,7 +53,7 @@ export async function initStore(b) {
       state.authReady = true;
       if (!user) {
         state.dataReady = false;
-        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.finalComments = {}; state.pasSubmissions = {}; state.memberResults = {}; state.selfResponses = {}; state.managers = {}; state.leaders = {}; state.emailToEmpId = {}; state.assignments = {};
+        state.groups = []; state.employees = []; state.reviews = {}; state.myReviews = {}; state.finals = {}; state.finalComments = {}; state.pasSubmissions = {}; state.memberResults = {}; state.selfResponses = {}; state.managers = {}; state.leaders = {}; state.directors = {}; state.emailToEmpId = {}; state.assignments = {};
       }
       notify();
     },

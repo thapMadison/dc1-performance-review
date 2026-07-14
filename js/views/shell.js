@@ -17,6 +17,12 @@ export function sidebarHtml(user, route) {
         { id: 'myreviews', label: 'Đánh giá của tôi', icon: 'clipboard' },
         { id: 'myresult', label: 'Kết quả của tôi', icon: 'star' },
       ]
+    : user.role === ROLE.DIRECTOR
+    ? [
+        { id: 'employees', label: 'Nhân viên', icon: 'users' },
+        { id: 'myreviews', label: 'Đánh giá của tôi', icon: 'clipboard' },
+        { id: 'myresult', label: 'Kết quả của tôi', icon: 'star' },
+      ]
     : user.role === ROLE.LEADER
     ? [
         { id: 'employees', label: 'Phòng ban của tôi', icon: 'users' },
@@ -68,8 +74,8 @@ export function sidebarHtml(user, route) {
         <div style="flex:1;min-width:0">
           <div style="font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(user.name)}</div>
           <div style="font-size:11px;color:#6B7B92;display:flex;align-items:center;gap:5px">
-            <span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${user.role === ROLE.MANAGER ? '#29ABE225' : user.role === ROLE.LEADER ? '#1E9E6A2E' : 'rgba(255,255,255,0.08)'};color:${user.role === ROLE.MANAGER ? 'var(--blue)' : user.role === ROLE.LEADER ? '#43CE94' : '#9AA8BD'};font-weight:700;font-size:10px;letter-spacing:0.04em;text-transform:uppercase">
-              ${user.role === ROLE.MANAGER ? 'Manager' : user.role === ROLE.LEADER ? 'Leader' : 'Reviewer'}
+            <span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${user.role === ROLE.MANAGER ? '#29ABE225' : user.role === ROLE.DIRECTOR ? '#7C5CFC2E' : user.role === ROLE.LEADER ? '#1E9E6A2E' : 'rgba(255,255,255,0.08)'};color:${user.role === ROLE.MANAGER ? 'var(--blue)' : user.role === ROLE.DIRECTOR ? '#A78BFA' : user.role === ROLE.LEADER ? '#43CE94' : '#9AA8BD'};font-weight:700;font-size:10px;letter-spacing:0.04em;text-transform:uppercase">
+              ${user.role === ROLE.MANAGER ? 'Manager' : user.role === ROLE.DIRECTOR ? 'Director' : user.role === ROLE.LEADER ? 'Leader' : 'Reviewer'}
             </span>
           </div>
         </div>
